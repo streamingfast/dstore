@@ -86,7 +86,7 @@ func TestWalkLocalFilePrefix(t *testing.T) {
 func TestConcurrentOverwrite(t *testing.T) {
 	t.Skip() // need GS access to test this, do it on your PC
 
-	path := "gs://eoscanada-public-nodeos-archive/dev"
+	path := "gs://example/dev"
 	s, err := NewStore(fmt.Sprintf("%s/tmp-nooverwrite-%012d", path, time.Now().UnixNano()), "jsonl.gz", "gz", true)
 	require.NoError(t, err)
 
@@ -120,7 +120,7 @@ func TestConcurrentOverwrite(t *testing.T) {
 func TestConcurrentNoOverwrite(t *testing.T) {
 	t.Skip() // need GS access to test this, do it on your PC
 
-	path := "gs://eoscanada-public-nodeos-archive/dev"
+	path := "gs://example/dev"
 	s, err := NewStore(fmt.Sprintf("%s/tmp-nooverwrite-%012d", path, time.Now().UnixNano()), "jsonl.gz", "gz", false)
 	require.NoError(t, err)
 
@@ -165,7 +165,7 @@ func TestWalkRemote(t *testing.T) {
 	t.Skip() // need GS access to test this, do it on your PC
 	expected := []string{"00000001", "00000002", "00000003"}
 
-	path := "gs://eoscanada-public-nodeos-archive/dev"
+	path := "gs://example/dev"
 	s, err := NewStore(fmt.Sprintf("%s/tmp-%012d", path, time.Now().UnixNano()), "jsonl.gz", "gz", false)
 	assert.NoError(t, err)
 	for _, f := range expected {
