@@ -2,6 +2,7 @@ package dstore
 
 import (
 	"bytes"
+	"net/url"
 	"os"
 	"testing"
 
@@ -14,11 +15,12 @@ func TestS3SToreWriteObject(t *testing.T) {
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "region")
 
 	//https://s3.console.aws.amazon.com/s3/buckets/aws-store-dev-bucket/?region=us-east-2&tab=overviewhttps://s3.console.aws.amazon.com/s3/buckets/aws-store-dev-bucket/?region=us-east-2&tab=overview
-	s, err := NewS3Store("aws-store-dev-bucket", "us-east-2", "", "", false)
+	base, _ := url.Parse("s3://aws-store-dev-bucket/test?region=us-east-2")
+	s, err := NewS3Store(base, "", "", false)
 	assert.NoError(t, err)
 
 	content := "hello world"
-	err = s.WriteObject("temp.txt", bytes.NewReader([]byte(content)))
+	err = s.WriteObject(bctx, "temp.txt", bytes.NewReader([]byte(content)))
 	assert.NoError(t, err)
 
 }

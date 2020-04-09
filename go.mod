@@ -5,6 +5,7 @@ go 1.12
 require (
 	cloud.google.com/go v0.50.0 // indirect
 	cloud.google.com/go/storage v1.4.0
+	github.com/DataDog/zstd v1.4.5
 	github.com/aws/aws-sdk-go v1.25.43
 	github.com/dfuse-io/logging v0.0.0-20200406213449-45fc25dc6a8d
 	github.com/eoscanada/dstore v1.0.3 // indirect
