@@ -8,7 +8,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
@@ -22,7 +21,6 @@ type GSStore struct {
 	baseURL *url.URL
 	client  *storage.Client
 	*commonStore
-	operationTimeout time.Duration
 }
 
 func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*GSStore, error) {
@@ -66,31 +64,6 @@ func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	if err := s.compressedCopy(f, w); err != nil {
 		return err
 	}
-	// switch s.compressionType {
-	// case "gzip":
-	// 	gw := gzip.NewWriter(w)
-	// 	if _, err := io.Copy(gw, f); err != nil {
-	// 		return err
-	// 	}
-	// 	if err := gw.Close(); err != nil {
-	// 		return err
-	// 	}
-	// case "zstd":
-	// 	zstdEncoder, err := zstd.NewWriter(w)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if _, err := io.Copy(zstdEncoder, f); err != nil {
-	// 		return err
-	// 	}
-	// 	if err := zstdEncoder.Close(); err != nil {
-	// 		return err
-	// 	}
-	// default:
-	// 	if _, err := io.Copy(w, f); err != nil {
-	// 		return err
-	// 	}
-	// }
 
 	if err := w.Close(); err != nil {
 		if s.overwrite {
@@ -120,27 +93,6 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	}
 
 	return s.uncompressedReader(reader)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// switch s.compressionType {
-	// case "gzip":
-	// 	gzipReader, err := NewGZipReadCloser(reader)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("unable to create gzip reader: %s", err)
-	// 	}
-
-	// 	return gzipReader, nil
-	// case "zstd":
-	// 	zstdReader, err := zstd.NewReader(reader)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("unable to create zstd reader: %s", err)
-	// 	}
-
-	// 	return zstdReader.IOReadCloser(), nil
-	// default:
-	// 	return reader, nil
-	// }
 }
 
 func (s *GSStore) DeleteObject(ctx context.Context, base string) error {
@@ -169,17 +121,12 @@ func (s *GSStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, ma
 	return listFiles(ctx, s, prefix, ignoreSuffix, max)
 }
 
-func (s *GSStore) SetOperationTimeout(d time.Duration) {
-	s.operationTimeout = d
-}
-
 func (s *GSStore) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
 	q := &storage.Query{}
 	q.Prefix = strings.TrimLeft(s.baseURL.Path, "/") + "/"
 	if prefix != "" {
-
 		q.Prefix = filepath.Join(q.Prefix, prefix)
-		// join cleans the string and will remove the trailing / in the prefix is present.
+		// join cleans the string and will remove the trailing / in the prefix if present.
 		// adding it back to prevent false positive matches
 		if prefix[len(prefix)-1:] == "/" {
 			q.Prefix = q.Prefix + "/"
