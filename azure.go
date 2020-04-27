@@ -102,9 +102,8 @@ func (a AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 		CacheControl: "public, max-age=86400",
 	}
 
-	bufferSize := 1 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
-	maxBuffers := 3               // Number of rotating buffers that are used when uploading
-
+	bufferSize := 25 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
+	maxBuffers := 4                // Number of rotating buffers that are used when uploading
 	_, err = azblob.UploadStreamToBlockBlob(ctx, f, blobURL, azblob.UploadStreamToBlockBlobOptions{BlobHTTPHeaders: blolbHeader,
 		BufferSize:       bufferSize,
 		MaxBuffers:       maxBuffers,

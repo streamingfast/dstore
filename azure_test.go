@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,7 +75,7 @@ func Test_decodeAzureScheme(t *testing.T) {
 
 func TestAzureSToreWriteObject(t *testing.T) {
 	t.Skip() // need azure access to test this, do it on your PC
-	os.Setenv("AZURE_STORAGE_KEY", "")
+	//os.Setenv("AZURE_STORAGE_KEY", "")
 
 	base, _ := url.Parse("az://dfusesandbox.demo/test")
 	s, err := NewAzureStore(base, "", "", false)
