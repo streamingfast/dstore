@@ -2,6 +2,7 @@ package dstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,6 +18,8 @@ import (
 
 // gs://blah/indexes    "shards-200/0000"
 
+var bctx = context.Background()
+
 func TestWalkLocalIgnoreNotFound(t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
@@ -26,7 +29,7 @@ func TestWalkLocalIgnoreNotFound(t *testing.T) {
 	s, err := NewStore("file://"+dir, "jsonl.gz", "gz", false)
 	assert.NoError(t, err)
 
-	err = s.Walk("bubblicious/0000", "", func(f string) error { return nil })
+	err = s.Walk(bctx, "bubblicious/0000", "", func(f string) error { return nil })
 	require.NoError(t, err)
 }
 
@@ -44,13 +47,13 @@ func TestWalkLocalPathPrefix(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, f := range expected {
-		s.WriteObject(filepath.Join("0000", f), strings.NewReader("."))
+		s.WriteObject(bctx, filepath.Join("0000", f), strings.NewReader("."))
 	}
 
 	seen := []string{}
-	err = s.Walk("0000", "", func(f string) error {
+	err = s.Walk(bctx, "0000", "", func(f string) error {
 		seen = append(seen, f)
-		exists, err := s.FileExists(filepath.Join("0000", f))
+		exists, err := s.FileExists(bctx, filepath.Join("0000", f))
 		assert.NoError(t, err)
 		assert.True(t, exists)
 		return nil
@@ -68,13 +71,13 @@ func TestWalkLocalFilePrefix(t *testing.T) {
 	s, err := NewStore("file://"+dir, "jsonl.gz", "gz", false)
 	assert.NoError(t, err)
 	for _, f := range expected {
-		s.WriteObject(f, strings.NewReader("."))
+		s.WriteObject(bctx, f, strings.NewReader("."))
 	}
 
 	seen := []string{}
-	err = s.Walk("0000", "", func(f string) error {
+	err = s.Walk(bctx, "0000", "", func(f string) error {
 		seen = append(seen, f)
-		exists, err := s.FileExists(f)
+		exists, err := s.FileExists(bctx, f)
 		assert.NoError(t, err)
 		assert.True(t, exists)
 		return nil
@@ -95,11 +98,11 @@ func TestConcurrentOverwrite(t *testing.T) {
 
 	// Write the same file simultaneously
 	go func() {
-		err := s.WriteObject("samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
+		err := s.WriteObject(bctx, "samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
 		e1 <- err
 	}()
 	go func() {
-		err := s.WriteObject("samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
+		err := s.WriteObject(bctx, "samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
 		e2 <- err
 	}()
 	err1 := <-e1
@@ -108,10 +111,10 @@ func TestConcurrentOverwrite(t *testing.T) {
 	require.NoError(t, err2)
 
 	// Write the same file afterwards
-	err = s.WriteObject("samefile", strings.NewReader("pleasewriteme"))
+	err = s.WriteObject(bctx, "samefile", strings.NewReader("pleasewriteme"))
 	require.NoError(t, err)
 
-	o, err := s.OpenObject("samefile")
+	o, err := s.OpenObject(bctx, "samefile")
 	require.NoError(t, err)
 
 	assert.Equal(t, "pleasewriteme", readFile(t, o), "overwrite should be true")
@@ -129,11 +132,11 @@ func TestConcurrentNoOverwrite(t *testing.T) {
 
 	// Write the same file simultaneously
 	go func() {
-		err := s.WriteObject("samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
+		err := s.WriteObject(bctx, "samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
 		e1 <- err
 	}()
 	go func() {
-		err := s.WriteObject("samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
+		err := s.WriteObject(bctx, "samefile", strings.NewReader("abcdefghijklmnopqrstuvwxyz"))
 		e2 <- err
 	}()
 	err1 := <-e1
@@ -142,10 +145,10 @@ func TestConcurrentNoOverwrite(t *testing.T) {
 	require.NoError(t, err2)
 
 	// Write the same file afterwards
-	err = s.WriteObject("samefile", strings.NewReader("nowriteme"))
+	err = s.WriteObject(bctx, "samefile", strings.NewReader("nowriteme"))
 	require.NoError(t, err)
 
-	o, err := s.OpenObject("samefile")
+	o, err := s.OpenObject(bctx, "samefile")
 	require.NoError(t, err)
 
 	assert.Equal(t, "abcdefghijklmnopqrstuvwxyz", readFile(t, o), "overwrite should be false")
@@ -169,13 +172,13 @@ func TestWalkRemote(t *testing.T) {
 	s, err := NewStore(fmt.Sprintf("%s/tmp-%012d", path, time.Now().UnixNano()), "jsonl.gz", "gz", false)
 	assert.NoError(t, err)
 	for _, f := range expected {
-		s.WriteObject(f, strings.NewReader("."))
+		s.WriteObject(bctx, f, strings.NewReader("."))
 	}
 
 	seen := []string{}
-	s.Walk("0000", "", func(f string) error {
+	s.Walk(bctx, "0000", "", func(f string) error {
 		seen = append(seen, f)
-		exists, err := s.FileExists(f)
+		exists, err := s.FileExists(bctx, f)
 		assert.NoError(t, err)
 		assert.True(t, exists)
 		return nil
