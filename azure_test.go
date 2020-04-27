@@ -80,47 +80,45 @@ func TestAzureSToreWriteObject(t *testing.T) {
 
 	base, _ := url.Parse("az://dfusesandbox.demo/test")
 	s, err := NewAzureStore(base, "", "", false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expectedFiles := []string{}
-	files := []struct {
-		content string
-		name    string
-	}{
-		{
-			content: "block range 0 - 499",
-			name:    "blk-0000000000.txt",
-		},
-		{
-			content: "block range 500 - 999",
-			name:    "blk-0000000500.txt",
-		},
-		{
-			content: "block range 1000 - 1499",
-			name:    "blk-0000001000.txt",
-		},
-		{
-			content: "block range 1500 - 1999",
-			name:    "blk-0000001500.txt",
-		},
+	files := map[string]string{
+		"blk-0000000000.txt": "block range 0 - 499",
+		"blk-0000000500.txt": "block range 500 - 999",
+		"blk-0000001000.txt": "block range 1000 - 1499",
+		"blk-0000001500.txt": "block range 1500 - 1999",
 	}
 
-	for _, file := range files {
-		fmt.Printf("writting file: %s\n", file.name)
-		expectedFiles = append(expectedFiles, file.name)
-		err = s.WriteObject(context.Background(), file.name, bytes.NewReader([]byte(file.content)))
-		assert.NoError(t, err)
+	for fileName, content := range files {
+		fmt.Printf("writting file: %s with content: %s\n", fileName, content)
+		expectedFiles = append(expectedFiles, fileName)
+		err = s.WriteObject(context.Background(), fileName, bytes.NewReader([]byte(content)))
+		require.NoError(t, err)
 	}
 
 	readFiles, err := s.ListFiles(context.Background(), "", "", 10)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ElementsMatch(t, expectedFiles, readFiles)
 
-	for _, file := range readFiles {
-		err = s.DeleteObject(context.Background(), file)
-		assert.NoError(t, err)
-
+	for _, fileName := range readFiles {
+		f, err := s.OpenObject(context.Background(), fileName)
+		require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err = buf.ReadFrom(f)
+		require.NoError(t, err)
+		content := buf.String()
+		fmt.Printf("reading file: %s with content: %s\n", fileName, content)
+		assert.Equal(t, files[fileName], content)
 	}
 
-	fmt.Println("read files: ", readFiles)
+	for _, fileName := range readFiles {
+		fmt.Printf("deleting file: %s\n", fileName)
+		err = s.DeleteObject(context.Background(), fileName)
+		assert.NoError(t, err)
+	}
+
+	readFiles, err = s.ListFiles(context.Background(), "", "", 10)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{}, readFiles)
 }
