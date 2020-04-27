@@ -13,8 +13,9 @@ import (
 
 func TestS3StoreWriteObject(t *testing.T) {
 	t.Skip() // need s3 access to test this, do it on your PC
+	// Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
 
-	//https://s3.console.aws.amazon.com/s3/buckets/dfuse-customer-outbox/?region=us-east-2&tab=overview
+	// https://s3.console.aws.amazon.com/s3/buckets/dfuse-customer-outbox/?region=us-east-2&tab=overview
 	base, _ := url.Parse("s3://dfuse-customer-outbox/testing?region=us-east-2")
 	s, err := NewS3Store(base, "", "", false)
 	require.NoError(t, err)
