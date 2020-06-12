@@ -63,7 +63,7 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 	case "az":
 		return NewAzureStore(base, extension, compressionType, overwrite)
 	case "s3":
-		//return NewS3Store(base, extension, compressionType, overwrite)
+		return NewS3Store(base, extension, compressionType, overwrite)
 	case "file":
 		return NewLocalStore(base.Path, extension, compressionType, overwrite)
 	case "":
