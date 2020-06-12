@@ -11,14 +11,15 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 type S3Store struct {
-	baseURL  *url.URL
-	basePath string
+	bucket   string
+	path     string
 	service  *s3.S3
 	uploader *s3manager.Uploader
 	context  context.Context
@@ -32,28 +33,84 @@ func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite b
 		return nil, fmt.Errorf("specify s3 bucket like: s3://bucket/path?region=us-east-1")
 	}
 
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(region)})
-	if err != nil {
-		return nil, fmt.Errorf("error fetching AWS session info from env: %s", err)
-	}
-
-	s3Service := s3.New(sess)
-	uploader := s3manager.NewUploader(sess)
-
-	return &S3Store{
-		baseURL:  baseURL,
-		service:  s3Service,
-		uploader: uploader,
+	s := &S3Store{
 		commonStore: &commonStore{
 			compressionType: compressionType,
 			extension:       extension,
 			overwrite:       overwrite,
 		},
-	}, nil
+	}
+
+	awsConfig := &aws.Config{
+		Region: &region,
+	}
+
+	hasEndpoint := hasCustomEndpoint(baseURL)
+	if hasEndpoint {
+		awsConfig.Endpoint = aws.String(baseURL.Host)
+		awsConfig.S3ForcePathStyle = aws.Bool(true)
+
+		if baseURL.Query().Get("insecure") != "" {
+			awsConfig.Endpoint = aws.String("http://" + *awsConfig.Endpoint)
+			awsConfig.DisableSSL = aws.Bool(true)
+		}
+
+		pathParts := strings.Split(strings.TrimLeft(baseURL.Path, "/"), "/")
+
+		s.bucket = pathParts[0]
+		s.path = strings.Replace(baseURL.Path, s.bucket, "", 1)
+	} else {
+		s.bucket = baseURL.Hostname()
+		s.path = baseURL.Path
+	}
+
+	accessKeyID := baseURL.Query().Get("access_key_id")
+	secretAccessKey := baseURL.Query().Get("secret_access_key")
+	if accessKeyID != "" && secretAccessKey != "" {
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+	}
+
+	sess, err := session.NewSession(awsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching AWS session info from env: %s", err)
+	}
+
+	s.service = s3.New(sess)
+	s.uploader = s3manager.NewUploader(sess)
+	s.path = strings.Trim(s.path, "/")
+
+	return s, nil
+}
+
+func hasCustomEndpoint(s3URL *url.URL) bool {
+	// As soon as there is a port in the url, we are sure that's it's the
+	// hostname that should be configured, so move along
+	if s3URL.Port() != "" {
+		return true
+	}
+
+	// If there is no `.` in the hostname, we assume it's a bucket. It could still be
+	// problematic for `localhost`, we are expecting people to use `:<port>` to go
+	// in the condition above.
+	host := s3URL.Hostname()
+	if !strings.Contains(host, ".") {
+		return false
+	}
+
+	// Otherwise, by default we assume it's an hostname followed by the bucket. If
+	// operator really intent to use the bucket directly an it contains dot, the
+	// query parameter `infer_aws_endpoint=true` can be used to tell the store
+	// implementation that the hostname is the actual bucket
+	inferEndpoint := s3URL.Query().Get("infer_aws_endpoint")
+	if inferEndpoint != "" {
+		return false
+	}
+
+	return true
 }
 
 func (s *S3Store) ObjectPath(name string) string {
-	return path.Join(strings.TrimLeft(s.baseURL.Path, "/"), s.pathWithExt(name))
+	return path.Join(s.path, s.pathWithExt(name))
 }
 
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
@@ -84,7 +141,7 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	}()
 
 	_, err = s.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: aws.String(s.baseURL.Host),
+		Bucket: aws.String(s.bucket),
 		Key:    &path,
 		Body:   pipeRead,
 	})
@@ -102,7 +159,7 @@ func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 	path := s.ObjectPath(base)
 
 	_, err := s.service.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(s.baseURL.Host),
+		Bucket: aws.String(s.bucket),
 		Key:    &path,
 	})
 	if err != nil {
@@ -120,7 +177,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	path := s.ObjectPath(name)
 
 	reader, err := s.service.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(s.baseURL.Host),
+		Bucket: aws.String(s.bucket),
 		Key:    &path,
 	})
 	if err != nil {
@@ -131,7 +188,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 }
 
 func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
-	targetPrefix := strings.TrimLeft(s.baseURL.Path, "/") + "/"
+	targetPrefix := s.path + "/"
 	if prefix != "" {
 		targetPrefix = filepath.Join(targetPrefix, prefix)
 		if prefix[len(prefix)-1:] == "/" {
@@ -140,7 +197,7 @@ func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename st
 	}
 
 	q := &s3.ListObjectsV2Input{
-		Bucket: aws.String(s.baseURL.Host),
+		Bucket: aws.String(s.bucket),
 		Prefix: &prefix,
 	}
 
@@ -168,13 +225,13 @@ func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename st
 }
 
 func (s *S3Store) toBaseName(filename string) string {
-	return strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), strings.TrimLeft(s.baseURL.Path, "/")+"/")
+	return strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), s.path+"/")
 }
 
 func (s *S3Store) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
 	_, err := s.service.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(s.baseURL.Host),
+		Bucket: aws.String(s.bucket),
 		Key:    &path,
 	})
 	return err
