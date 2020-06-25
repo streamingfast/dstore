@@ -95,17 +95,29 @@ func (a AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 		return nil
 	}
 
-	blobURL := a.containerURL.NewBlockBlobURL(path)
+	pipeRead, pipeWrite := io.Pipe()
+	writeDone := make(chan error, 1)
+	ctx, cancel := context.WithCancel(ctx)
 
-	blolbHeader := azblob.BlobHTTPHeaders{
+	go func() {
+		defer pipeWrite.Close()
+
+		err := a.compressedCopy(f, pipeWrite)
+		if err != nil {
+			cancel()
+		}
+		writeDone <- err
+	}()
+
+	bufferSize := 1 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
+	maxBuffers := 3               // Number of rotating buffers that are used when uploading
+	blobURL := a.containerURL.NewBlockBlobURL(path)
+	blobHeader := azblob.BlobHTTPHeaders{
 		ContentType:  "application/octet-stream",
 		CacheControl: "public, max-age=86400",
 	}
 
-	bufferSize := 1 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
-	maxBuffers := 3               // Number of rotating buffers that are used when uploading
-
-	_, err = azblob.UploadStreamToBlockBlob(ctx, f, blobURL, azblob.UploadStreamToBlockBlobOptions{BlobHTTPHeaders: blolbHeader,
+	_, err = azblob.UploadStreamToBlockBlob(ctx, pipeRead, blobURL, azblob.UploadStreamToBlockBlobOptions{BlobHTTPHeaders: blobHeader,
 		BufferSize:       bufferSize,
 		MaxBuffers:       maxBuffers,
 		Metadata:         azblob.Metadata{},
