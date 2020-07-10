@@ -8,6 +8,15 @@ or on cloud storage providers), list files, delete, etc..
 
 It is used by **[dfuse](https://github.com/dfuse-io/dfuse)**.
 
+## Features
+
+It currently supports:
+* AWS S3 (`s3://[bucket]/path?region=us-east-1`, with [AWS-specific env vars](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html))
+    * Minio (through the S3 interface)
+* Google Storage (`gs://[bucket]/path`, with `GOOGLE_APPLICATION_CREDENTIALS` env var set)
+* Azure Blob Storage (`az://[account].[container]/path`, with `AZURE_STORAGE_KEY` env var set)
+* Local file systems (including virtual of fused-based) (`file:///` prefix)
+
 
 ## Contributing
 

@@ -26,7 +26,7 @@ func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrit
 
 	accountName, containerName, err := decodeAzureScheme(baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("specify azure account name and container like: az://account,container/path")
+		return nil, fmt.Errorf("specify azure account name and container like: az://account.container/path")
 	}
 
 	accessKey := os.Getenv("AZURE_STORAGE_KEY")
