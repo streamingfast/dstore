@@ -70,6 +70,22 @@ func listFiles(ctx context.Context, store Store, prefix, ignoreSuffix string, ma
 	return
 }
 
+func (c *commonStore) maybeCompressedWriter(w io.Writer) (io.Writer, error) {
+	switch c.compressionType {
+	case "gzip":
+		return gzip.NewWriter(w), nil
+	case "zstd":
+		zstdEncoder, err := zstd.NewWriter(w)
+		if err != nil {
+			return nil, err
+		}
+
+		return zstdEncoder, nil
+	}
+
+	return w, nil
+}
+
 func (c *commonStore) compressedCopy(f io.Reader, w io.Writer) error {
 	switch c.compressionType {
 	case "gzip":

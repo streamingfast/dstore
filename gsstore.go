@@ -49,6 +49,21 @@ func (s *GSStore) toBaseName(filename string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), strings.TrimLeft(s.baseURL.Path, "/")+"/")
 }
 
+func (s *GSStore) Writer(ctx context.Context, base string) (writer io.Writer, err error) {
+	path := s.ObjectPath(base)
+
+	object := s.client.Bucket(s.baseURL.Host).Object(path)
+
+	if !s.overwrite {
+		object = object.If(storage.Conditions{DoesNotExist: true})
+	}
+	w := object.NewWriter(ctx)
+	w.ContentType = "application/octet-stream"
+	w.CacheControl = "public, max-age=86400"
+
+	return s.maybeCompressedWriter(w)
+}
+
 func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := s.ObjectPath(base)
 
