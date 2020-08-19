@@ -8,6 +8,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 //
@@ -55,8 +57,12 @@ func (s *LocalStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fu
 		walkPath = filepath.Dir(fullPath)
 	}
 
-	err := filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
-		if ignoreSuffix != "" && strings.HasSuffix(path, ignoreSuffix) {
+	if traceEnabled {
+		zlog.Debug("walking files", zap.String("walk_path", walkPath))
+	}
+
+	err := filepath.Walk(walkPath, func(infoPath string, info os.FileInfo, err error) error {
+		if ignoreSuffix != "" && strings.HasSuffix(infoPath, ignoreSuffix) {
 			// Early exist to avoid races with half-written `.tmp`
 			// files, that would error out with the `err != nil` check
 			// below.  Only for local ones, as Google Storage-based
@@ -71,16 +77,16 @@ func (s *LocalStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fu
 		}
 
 		if info.IsDir() {
-			if len(path) >= len(fullPath) && !strings.HasPrefix(path, fullPath) {
+			if len(infoPath) >= len(fullPath) && !strings.HasPrefix(infoPath, fullPath) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !strings.HasPrefix(path, fullPath) {
+		if !strings.HasPrefix(infoPath, fullPath) {
 			return nil
 		}
 
-		if err := f(s.toBaseName(info.Name())); err != nil {
+		if err := f(s.toBaseName(infoPath)); err != nil {
 			if err == StopIteration {
 				return nil
 			}
@@ -138,7 +144,10 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 }
 
 func (s *LocalStore) toBaseName(filename string) string {
-	return strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), s.basePath)
+	baseName := strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), s.basePath)
+	baseName = strings.TrimPrefix(baseName, "/")
+
+	return baseName
 }
 
 func (s *LocalStore) ObjectPath(name string) string {

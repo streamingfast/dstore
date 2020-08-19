@@ -17,6 +17,34 @@ It currently supports:
 * Azure Blob Storage (`az://[account].[container]/path`, with `AZURE_STORAGE_KEY` env var set)
 * Local file systems (including virtual of fused-based) (`file:///` prefix)
 
+### Testing
+
+The `storetests` package contains all our integration tests we perform on our store implementation.
+Some of the store implementations can be tested directly while few others, from Cloud Providers
+essentially, requires some extra environment variables to run. They are skip if the correct
+environment variables for the provider is not set.
+
+To run the full test suite, you will need to peform the following steps.
+
+First, you will need to have locally a few dependencies:
+- [minio](https://github.com/minio/minio)
+
+Then, start `minio` server:
+
+```bash
+mkdir -p /tmp/minio-tests/store-tests
+cd /tmp/minio-tests
+minio server .
+```
+
+Ensure you have access to GCP Storage Bucket, S3 Bucket, then run the full test suite:
+
+```bash
+STORETESTS_GS_STORE_URL="gs://dfuse-developement-random/store-tests"\
+STORETESTS_S3_STORE_URL="s3://dfuse-customer-outbox/store-tests?region=us-east-2"\
+STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"\
+go test ./...
+```
 
 ## Contributing
 
@@ -28,7 +56,6 @@ Report any protocol-specific issues in their
 **Please first refer to the general
 [dfuse contribution guide](https://github.com/dfuse-io/dfuse/blob/master/CONTRIBUTING.md)**,
 if you wish to contribute to this code base.
-
 
 ## License
 

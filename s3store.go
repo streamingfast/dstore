@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"go.uber.org/zap"
 )
 
 type S3Store struct {
@@ -28,11 +29,6 @@ type S3Store struct {
 }
 
 func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite bool) (*S3Store, error) {
-	region := baseURL.Query().Get("region")
-	if region == "" {
-		return nil, fmt.Errorf("specify s3 bucket like: s3://bucket/path?region=us-east-1")
-	}
-
 	s := &S3Store{
 		commonStore: &commonStore{
 			compressionType: compressionType,
@@ -41,45 +37,60 @@ func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite b
 		},
 	}
 
-	awsConfig := &aws.Config{
-		Region: &region,
-	}
-
-	hasEndpoint := hasCustomEndpoint(baseURL)
-	if hasEndpoint {
-		awsConfig.Endpoint = aws.String(baseURL.Host)
-		awsConfig.S3ForcePathStyle = aws.Bool(true)
-
-		if baseURL.Query().Get("insecure") != "" {
-			awsConfig.Endpoint = aws.String("http://" + *awsConfig.Endpoint)
-			awsConfig.DisableSSL = aws.Bool(true)
-		}
-
-		pathParts := strings.Split(strings.TrimLeft(baseURL.Path, "/"), "/")
-
-		s.bucket = pathParts[0]
-		s.path = strings.Replace(baseURL.Path, s.bucket, "", 1)
-	} else {
-		s.bucket = baseURL.Hostname()
-		s.path = baseURL.Path
-	}
-
-	accessKeyID := baseURL.Query().Get("access_key_id")
-	secretAccessKey := baseURL.Query().Get("secret_access_key")
-	if accessKeyID != "" && secretAccessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+	awsConfig, bucket, path, err := ParseS3URL(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid s3 url: %w", err)
 	}
 
 	sess, err := session.NewSession(awsConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching AWS session info from env: %s", err)
+		return nil, fmt.Errorf("error fetching AWS session info from env: %w", err)
 	}
 
 	s.service = s3.New(sess)
 	s.uploader = s3manager.NewUploader(sess)
-	s.path = strings.Trim(s.path, "/")
+	s.bucket = bucket
+	s.path = path
 
 	return s, nil
+}
+
+func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket string, path string, err error) {
+	region := s3URL.Query().Get("region")
+	if region == "" {
+		return nil, "", "", fmt.Errorf("specify s3 bucket like: s3://bucket/path?region=us-east-1")
+	}
+
+	awsConfig := &aws.Config{
+		Region: &region,
+	}
+
+	hasEndpoint := hasCustomEndpoint(s3URL)
+	if hasEndpoint {
+		awsConfig.Endpoint = aws.String(s3URL.Host)
+		awsConfig.S3ForcePathStyle = aws.Bool(true)
+
+		if s3URL.Query().Get("insecure") != "" {
+			awsConfig.Endpoint = aws.String("http://" + *awsConfig.Endpoint)
+			awsConfig.DisableSSL = aws.Bool(true)
+		}
+
+		pathParts := strings.Split(strings.TrimLeft(s3URL.Path, "/"), "/")
+
+		bucket = pathParts[0]
+		path = strings.Replace(s3URL.Path, bucket, "", 1)
+	} else {
+		bucket = s3URL.Hostname()
+		path = s3URL.Path
+	}
+
+	accessKeyID := s3URL.Query().Get("access_key_id")
+	secretAccessKey := s3URL.Query().Get("secret_access_key")
+	if accessKeyID != "" && secretAccessKey != "" {
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+	}
+
+	return awsConfig, bucket, strings.Trim(path, "/"), nil
 }
 
 func hasCustomEndpoint(s3URL *url.URL) bool {
@@ -196,9 +207,13 @@ func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename st
 		}
 	}
 
+	if traceEnabled {
+		zlog.Debug("walking files", zap.String("bucket", s.bucket), zap.String("prefix", targetPrefix))
+	}
+
 	q := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
-		Prefix: &prefix,
+		Prefix: &targetPrefix,
 	}
 
 	var innerErr error

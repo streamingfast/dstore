@@ -1,20 +1,18 @@
 package storetests
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
-	"github.com/dfuse-io/dstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var fileExistsTest = []StoreTestFunc{
-	TestFileExistsSingle,
+var fileExistsTests = []StoreTestFunc{
+	TestFileExists,
 }
 
-func TestFileExistsSingle(t *testing.T, factory StoreFactory) {
+func TestFileExists(t *testing.T, factory StoreFactory) {
 	testCases := []struct {
 		name          string
 		searchFor     string
@@ -28,7 +26,12 @@ func TestFileExistsSingle(t *testing.T, factory StoreFactory) {
 			shouldBeFound: true, expectedErr: nil,
 			whenFiles: []testFile{{"1", "c1"}},
 		},
-
+		{
+			name:          "found sub paths",
+			searchFor:     "0/1",
+			shouldBeFound: true, expectedErr: nil,
+			whenFiles: []testFile{{"0/1", "c1"}},
+		},
 		{
 			name:          "not found",
 			searchFor:     "2",
@@ -53,15 +56,4 @@ func TestFileExistsSingle(t *testing.T, factory StoreFactory) {
 			}
 		})
 	}
-}
-
-func addFileToStore(t *testing.T, store dstore.Store, id string, data string) {
-	buf := bytes.NewBuffer([]byte(data))
-
-	require.NoError(t, store.WriteObject(context.Background(), id, buf))
-}
-
-type testFile struct {
-	id      string
-	content string
 }

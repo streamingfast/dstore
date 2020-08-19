@@ -1,6 +1,12 @@
 package storetests
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -8,16 +14,22 @@ import (
 	"testing"
 
 	"github.com/dfuse-io/dstore"
+	"github.com/stretchr/testify/require"
 )
 
+var ctx = context.Background()
+var noCleanup = os.Getenv("STORETESTS_NO_CLEANUP") == "true"
+
 func TestAll(t *testing.T, factory StoreFactory) {
-	all := map[string][]StoreTestFunc{
-		"file_exists": fileExistsTest,
+	all := [][]StoreTestFunc{
+		fileExistsTests,
+		walkTests,
+		writeObjectTests,
 	}
 
-	for category, testFuncs := range all {
+	for _, testFuncs := range all {
 		for _, testFunc := range testFuncs {
-			t.Run(category+"/"+getFunctionName(testFunc), func(t *testing.T) {
+			t.Run(getFunctionName(testFunc), func(t *testing.T) {
 				testFunc(t, factory)
 			})
 		}
@@ -43,4 +55,33 @@ func getFunctionName(i interface{}) string {
 	}
 
 	return parts[1]
+}
+
+func addFileToStore(t *testing.T, store dstore.Store, id string, data string) {
+	buf := bytes.NewBuffer([]byte(data))
+	require.NoError(t, store.WriteObject(ctx, id, buf))
+}
+
+type testFile struct {
+	id      string
+	content string
+}
+
+func readObjectAndClose(t *testing.T, o io.ReadCloser) string {
+	defer o.Close()
+	data, err := ioutil.ReadAll(o)
+	require.NoError(t, err)
+
+	return string(data)
+}
+
+func supportsConcurrentWrites(store dstore.Store) bool {
+	switch store.(type) {
+	case *dstore.GSStore, *dstore.S3Store, *dstore.AzureStore:
+		return true
+	case *dstore.LocalStore, *dstore.MockStore:
+		return false
+	}
+
+	panic(fmt.Errorf("unknown store type %T regarding support for concurrent writes", store))
 }
