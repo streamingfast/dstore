@@ -23,6 +23,7 @@ var noCleanup = os.Getenv("STORETESTS_NO_CLEANUP") == "true"
 func TestAll(t *testing.T, factory StoreFactory) {
 	all := [][]StoreTestFunc{
 		fileExistsTests,
+		openObjectTests,
 		walkTests,
 		writeObjectTests,
 	}

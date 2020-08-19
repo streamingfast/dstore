@@ -15,7 +15,7 @@ import (
 )
 
 type MockStore struct {
-	files     map[string]*bytes.Buffer
+	files     map[string][]byte
 	writeFunc func(base string, f io.Reader) (err error)
 
 	shouldOverwrite bool
@@ -23,19 +23,14 @@ type MockStore struct {
 
 func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockStore {
 	return &MockStore{
-		files:     make(map[string]*bytes.Buffer),
+		files:     make(map[string][]byte),
 		writeFunc: writeFunc,
 	}
 }
 
 // WriteFiles dumps currently know file
 func (m *MockStore) WriteFiles(toDirectory string) error {
-	for name, buffer := range m.files {
-		content, err := ioutil.ReadAll(buffer)
-		if err != nil {
-			return fmt.Errorf("read content of %q: %w", name, err)
-		}
-
+	for name, content := range m.files {
 		if err := ioutil.WriteFile(path.Join(toDirectory, name), content, os.ModePerm); err != nil {
 			return fmt.Errorf("writing file %q: %w", name, err)
 		}
@@ -50,25 +45,26 @@ func (m *MockStore) SetFile(name string, content []byte) {
 	isError := string(content) == "err"
 	zlog.Debug("adding file", zap.String("name", name), zap.Int("content_length", len(content)), zap.Bool("is_error", isError))
 
-	m.files[name] = bytes.NewBuffer(content)
+	m.files[name] = content
 }
 
 func (m *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	zlog.Debug("opening object", zap.String("name", name))
 
-	buffer := m.files[name]
-	if buffer == nil {
+	content, exists := m.files[name]
+	if !exists {
 		zlog.Debug("opening object not found", zap.String("name", name))
 		return nil, io.EOF
 	}
 
-	if string(buffer.Bytes()) == "err" {
+	if string(content) == "err" {
 		zlog.Debug("opening object error", zap.String("name", name))
 		return nil, fmt.Errorf("%s errored", name)
 	}
 
-	zlog.Debug("opened object", zap.String("name", name), zap.Int("content_length", buffer.Len()))
-	return ioutil.NopCloser(buffer), nil
+	zlog.Debug("opened object", zap.String("name", name), zap.Int("content_length", len(content)))
+	return ioutil.NopCloser(bytes.NewReader(content)), nil
+
 }
 
 func (m *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
@@ -77,27 +73,27 @@ func (m *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 	}
 
 	zlog.Debug("writing object", zap.String("name", base))
-	buffer := m.files[base]
-	if buffer == nil {
+	content, exists := m.files[base]
+	if !exists {
 		zlog.Debug("writing object not found, creating new one", zap.String("name", base))
-		buffer = bytes.NewBuffer(nil)
-		m.files[base] = buffer
 	} else {
 		if !m.shouldOverwrite {
 			zlog.Debug("writing object not allowing overwrite", zap.String("name", base))
 			return nil
 		}
 
-		zlog.Debug("writing object found, resetting it due to overwrite true", zap.String("name", base))
-		buffer.Reset()
+		zlog.Debug("writing object found, resetting it due to overwrite true", zap.String("name", base), zap.Int("content_length", len(content)))
 	}
 
+	buffer := bytes.NewBuffer(nil)
 	_, err = io.Copy(buffer, f)
 	if err != nil {
 		return fmt.Errorf("copy object to mock storage: %w", err)
 	}
 
-	zlog.Debug("wrote object", zap.String("name", base))
+	m.files[base] = buffer.Bytes()
+
+	zlog.Debug("wrote object", zap.String("name", base), zap.Int("content_length", len(m.files[base])))
 	return nil
 }
 
@@ -114,12 +110,12 @@ func (m *MockStore) DeleteObject(ctx context.Context, base string) error {
 func (m *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
 	zlog.Debug("checking if file exists", zap.String("name", base))
 
-	buffer := m.files[base]
-	if buffer == nil {
+	content, exists := m.files[base]
+	if !exists {
 		return false, nil
 	}
 
-	scnt := string(buffer.Bytes())
+	scnt := string(content)
 	if scnt == "err" {
 		return false, fmt.Errorf("%q errored", base)
 	}
