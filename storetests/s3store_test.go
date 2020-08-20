@@ -34,6 +34,7 @@ var s3StoreBaseURL = os.Getenv("STORETESTS_S3_STORE_URL")
 // And then use:
 //  STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
 var s3MinioStoreBaseURL = os.Getenv("STORETESTS_S3_MINIO_STORE_URL")
+var s3MinioStoreBaseURLEmptyBucket = os.Getenv("STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL")
 
 func TestS3Store(t *testing.T) {
 	if s3StoreBaseURL == "" {
@@ -41,7 +42,7 @@ func TestS3Store(t *testing.T) {
 		return
 	}
 
-	TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", false))
+	TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", false, false))
 }
 
 func TestS3Store_Overwrite(t *testing.T) {
@@ -50,7 +51,7 @@ func TestS3Store_Overwrite(t *testing.T) {
 		return
 	}
 
-	TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", true))
+	TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", true, false))
 }
 
 func TestS3Store_Minio(t *testing.T) {
@@ -59,23 +60,34 @@ func TestS3Store_Minio(t *testing.T) {
 		return
 	}
 
-	TestAll(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "", false))
+	TestAll(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "", false, false))
 }
 
-func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool) StoreFactory {
+func TestS3Store_Minio_EMPTY_BUCKET_FilePrefix(t *testing.T) {
+	if s3MinioStoreBaseURLEmptyBucket == "" {
+		t.Skip("You must provide a valid Minio S3 URL via STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL environment variable to execute those tests")
+		return
+	}
+
+	TestWalk_FilePrefix(t, createS3StoreFactory(t, s3MinioStoreBaseURLEmptyBucket, "", false, true))
+}
+
+func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool) StoreFactory {
 	random := rand.NewSource(time.Now().UnixNano())
 
 	return func() (dstore.Store, StoreCleanup) {
 		storeURL, err := url.Parse(baseURL)
 		require.NoError(t, err)
 
-		testPath := fmt.Sprintf("dstore-s3store-tests-%08x", random.Int63())
-		fullPath := storeURL.Path
-		if !strings.HasSuffix(fullPath, "/") {
-			fullPath += "/"
-		}
+		if !emptyBucket {
+			testPath := fmt.Sprintf("dstore-s3store-tests-%08x", random.Int63())
+			fullPath := storeURL.Path
+			if !strings.HasSuffix(fullPath, "/") {
+				fullPath += "/"
+			}
 
-		storeURL.Path = fullPath + testPath
+			storeURL.Path = fullPath + testPath
+		}
 
 		awsConfig, bucket, path, err := dstore.ParseS3URL(storeURL)
 		require.NoError(t, err)
@@ -93,6 +105,24 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 		require.NoError(t, err)
 
 		client := s3.New(sess)
+
+		if emptyBucket {
+			prefix := strings.TrimLeft(path, "/") + "/"
+			query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
+			seenFile := ""
+			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+				for _, el := range page.Contents {
+					seenFile = *el.Key
+				}
+				return false
+			})
+			if err != nil {
+				t.Fatalf("error returned: %s", err)
+			}
+			if seenFile != "" {
+				t.Fatalf("requested empty bucket, but given s3 store URL bucket (%s) is not empty", baseURL)
+			}
+		}
 
 		return store, func() {
 			if noCleanup {

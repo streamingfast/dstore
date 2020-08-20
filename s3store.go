@@ -199,7 +199,10 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 }
 
 func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
-	targetPrefix := s.path + "/"
+	targetPrefix := s.path
+	if targetPrefix != "" {
+		targetPrefix += "/"
+	}
 	if prefix != "" {
 		targetPrefix = filepath.Join(targetPrefix, prefix)
 		if prefix[len(prefix)-1:] == "/" {

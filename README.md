@@ -42,7 +42,8 @@ Ensure you have access to GCP Storage Bucket, S3 Bucket, then run the full test 
 ```bash
 STORETESTS_GS_STORE_URL="gs://dfuse-developement-random/store-tests"\
 STORETESTS_S3_STORE_URL="s3://dfuse-customer-outbox/store-tests?region=us-east-2"\
-STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"\
+STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
+STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin" # this bucket MUST be empty for the test to run
 go test ./...
 ```
 
