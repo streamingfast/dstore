@@ -145,8 +145,12 @@ func (a AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 	return a.uncompressedReader(reader)
 }
 
-func (a AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error) {
-	return pushLocalFile(ctx, a, localFile, toBaseName)
+func (a AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
+	remove, err := pushLocalFile(ctx, a, localFile, toBaseName)
+	if err != nil {
+		return err
+	}
+	return remove()
 }
 
 func (a AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {

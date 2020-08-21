@@ -113,8 +113,12 @@ func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
 	return true, nil
 }
 
-func (s *GSStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error) {
-	return pushLocalFile(ctx, s, localFile, toBaseName)
+func (s *GSStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
+	remove, err := pushLocalFile(ctx, s, localFile, toBaseName)
+	if err != nil {
+		return err
+	}
+	return remove()
 }
 
 func (s *GSStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {

@@ -174,6 +174,10 @@ func (s *LocalStore) FileExists(ctx context.Context, base string) (bool, error) 
 	return false, err
 }
 
-func (s *LocalStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error) {
-	return pushLocalFile(ctx, s, localFile, toBaseName)
+func (s *LocalStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
+	remove, err := pushLocalFile(ctx, s, localFile, toBaseName)
+	if err != nil {
+		return err
+	}
+	return remove()
 }

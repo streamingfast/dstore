@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -17,6 +19,15 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"go.uber.org/zap"
 )
+
+var retryS3PushLocalFilesDelay time.Duration
+
+func init() {
+	retry := os.Getenv("DSTORE_S3_RETRY_PUSH_DELAY")
+	if retry != "" {
+		retryS3PushLocalFilesDelay, _ = time.ParseDuration(retry)
+	}
+}
 
 type S3Store struct {
 	bucket   string
@@ -255,9 +266,31 @@ func (s *S3Store) DeleteObject(ctx context.Context, base string) error {
 	return err
 }
 
-func (s *S3Store) PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error) {
-	return pushLocalFile(ctx, s, localFile, toBaseName)
+func (s *S3Store) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
+	remove, err := pushLocalFile(ctx, s, localFile, toBaseName)
+	if retryS3PushLocalFilesDelay != 0 {
+		time.Sleep(retryS3PushLocalFilesDelay)
+		exists, err := s.FileExists(ctx, toBaseName)
+		if err != nil {
+			zlog.Warn("just pushed file to dstore, but cannot check if it is still there after 500 milliseconds and retryS3PushLocalFiles is set", zap.Error(err))
+			return err
+		}
+		if !exists {
+			zlog.Warn("just pushed file to dstore, but it disappeared. Pushing again because retryS3PushLocalFiles is set", zap.String("dest basename", toBaseName))
+			rem, err := pushLocalFile(ctx, s, localFile, toBaseName)
+			if err != nil {
+				return err
+			}
+			return rem()
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+	return remove()
 }
+
 func (s *S3Store) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
 	return listFiles(ctx, s, prefix, ignoreSuffix, max)
 }

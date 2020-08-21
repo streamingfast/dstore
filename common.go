@@ -30,10 +30,10 @@ func (c *commonStore) pathWithExt(base string) string {
 	return base
 }
 
-func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName string) (err error) {
+func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName string) (removeFunc func() error, err error) {
 	f, err := os.Open(localFile)
 	if err != nil {
-		return fmt.Errorf("opening local file %q: %s", localFile, err)
+		return nil, fmt.Errorf("opening local file %q: %s", localFile, err)
 	}
 	defer f.Close()
 
@@ -42,14 +42,12 @@ func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName strin
 	// The file doesn't exist, let's continue.
 	err = store.WriteObject(ctx, toBaseName, f)
 	if err != nil {
-		return fmt.Errorf("writing %q to storage %q: %s", localFile, objPath, err)
+		return nil, fmt.Errorf("writing %q to storage %q: %s", localFile, objPath, err)
 	}
 
-	if err = os.Remove(localFile); err != nil {
-		return fmt.Errorf("error removing local file %q: %s", localFile, err)
-	}
-
-	return nil
+	return func() error {
+		return os.Remove(localFile)
+	}, nil
 }
 
 func listFiles(ctx context.Context, store Store, prefix, ignoreSuffix string, max int) (out []string, err error) {
