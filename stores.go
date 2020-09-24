@@ -77,34 +77,64 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 	return nil, fmt.Errorf("archive store only supports, file://, gs:// or local path")
 }
 
-func OpenObject(ctx context.Context, fileURL string) (out io.ReadCloser, err error) {
+type config struct {
+	compression string
+}
+
+type Option interface {
+	apply(config *config)
+}
+
+type optionFunc func(config *config)
+
+func (f optionFunc) apply(config *config) {
+	f(config)
+}
+
+func Compression(compressionType string) Option {
+	return optionFunc(func(config *config) {
+		config.compression = compressionType
+	})
+}
+
+// OpenObject directly opens the giving file URL by parsing the file url, extracting the
+// path and the filename from it, creating the store interface, opening the object directly
+// and returning all this.
+//
+// This is a shortcut helper function that make it simpler to get store from a single file
+// url.
+func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.ReadCloser, store Store, filename string, err error) {
+	var storeURL string
 	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
-		zlog.Info("file url is a local file, using it directly")
-		file, err := os.Open(fileURL)
+		zlog.Info("file url is a local existing ifle")
+		sanitizedURL := filepath.Clean(fileURL)
+		filename = filepath.Base(sanitizedURL)
+		storeURL = filepath.Dir(sanitizedURL)
+	} else {
+		zlog.Info("file url assumed to be a store url with a scheme")
+		url, err := url.Parse(fileURL)
 		if err != nil {
-			return nil, fmt.Errorf("open file: %w", err)
+			return nil, store, "", fmt.Errorf("parse file url: %w", err)
 		}
 
-		return file, nil
+		filename = filepath.Base(url.Path)
+		url.Path = filepath.Dir(url.Path)
+		storeURL = url.String()
 	}
 
-	zlog.Info("file url assumed to be a store")
-	url, err := url.Parse(fileURL)
+	zlog.Info("creating store", zap.String("store_url", storeURL), zap.String("filename", filename))
+	config := config{}
+	for _, opt := range opts {
+		opt.apply(&config)
+	}
+
+	store, err = NewStore(storeURL, "", config.compression, false)
 	if err != nil {
-		return nil, fmt.Errorf("parse file url: %w", err)
+		return nil, nil, filename, fmt.Errorf("open store: %w", err)
 	}
 
-	filename := filepath.Base(url.Path)
-	url.Path = filepath.Dir(url.Path)
-	storeURL := url.String()
-
-	zlog.Info("known tokens store configuration", zap.String("store_url", storeURL), zap.String("filename", filename))
-	store, err := NewStore(url.String(), "", "", false)
-	if err != nil {
-		return nil, fmt.Errorf("open store: %w", err)
-	}
-
-	return store.OpenObject(ctx, filename)
+	out, err = store.OpenObject(ctx, filename)
+	return
 }
 
 //
