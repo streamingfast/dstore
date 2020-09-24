@@ -8,7 +8,10 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type Store interface {
@@ -72,6 +75,36 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 	}
 
 	return nil, fmt.Errorf("archive store only supports, file://, gs:// or local path")
+}
+
+func OpenObject(ctx context.Context, fileURL string) (out io.ReadCloser, err error) {
+	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
+		zlog.Info("file url is a local file, using it directly")
+		file, err := os.Open(fileURL)
+		if err != nil {
+			return nil, fmt.Errorf("open file: %w", err)
+		}
+
+		return file, nil
+	}
+
+	zlog.Info("file url assumed to be a store")
+	url, err := url.Parse(fileURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse file url: %w", err)
+	}
+
+	filename := filepath.Base(url.Path)
+	url.Path = filepath.Dir(url.Path)
+	storeURL := url.String()
+
+	zlog.Info("known tokens store configuration", zap.String("store_url", storeURL), zap.String("filename", filename))
+	store, err := NewStore(url.String(), "", "", false)
+	if err != nil {
+		return nil, fmt.Errorf("open store: %w", err)
+	}
+
+	return store.OpenObject(ctx, filename)
 }
 
 //

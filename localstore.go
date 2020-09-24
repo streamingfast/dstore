@@ -22,6 +22,12 @@ type LocalStore struct {
 }
 
 func NewLocalStore(basePath, extension, compressionType string, overwrite bool) (*LocalStore, error) {
+	if !strings.HasPrefix(basePath, "file://") {
+		originalBasePath := basePath
+		basePath = filepath.Clean(basePath)
+		zlog.Info("sanitized base path", zap.String("original_base_path", originalBasePath), zap.String("sanitized_base_path", basePath))
+	}
+
 	info, err := os.Stat(basePath)
 	if err != nil {
 		if err := os.MkdirAll(basePath, os.ModePerm); err != nil {
