@@ -79,6 +79,7 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 
 type config struct {
 	compression string
+	overwrite   bool
 }
 
 type Option interface {
@@ -91,9 +92,24 @@ func (f optionFunc) apply(config *config) {
 	f(config)
 }
 
+// Compression defines which kind of compression to use when creating the store
+// instance.
+//
+// Valid `compressionType` values:
+// - <empty>       No compression
+// - zstd          Use ZSTD compression
+// - gzip          Use GZIP compression
 func Compression(compressionType string) Option {
 	return optionFunc(func(config *config) {
 		config.compression = compressionType
+	})
+}
+
+// AllowOverwrite allow files to be overwritten when already exist at a given
+// location.
+func AllowOverwrite() Option {
+	return optionFunc(func(config *config) {
+		config.overwrite = true
 	})
 }
 
@@ -106,7 +122,7 @@ func Compression(compressionType string) Option {
 func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.ReadCloser, store Store, filename string, err error) {
 	var storeURL string
 	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
-		zlog.Info("file url is a local existing ifle")
+		zlog.Info("file url is a local existing file")
 		sanitizedURL := filepath.Clean(fileURL)
 		filename = filepath.Base(sanitizedURL)
 		storeURL = filepath.Dir(sanitizedURL)
@@ -128,7 +144,7 @@ func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.Rea
 		opt.apply(&config)
 	}
 
-	store, err = NewStore(storeURL, "", config.compression, false)
+	store, err = NewStore(storeURL, "", config.compression, config.overwrite)
 	if err != nil {
 		return nil, nil, filename, fmt.Errorf("open store: %w", err)
 	}
