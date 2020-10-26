@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"path"
@@ -137,7 +136,11 @@ func (a AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 
 	get, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false)
 	if err != nil {
-		log.Fatal(err)
+		if err.Error() ==  string(azblob.ServiceCodeBlobNotFound) {
+			return nil, ErrNotFound
+		}
+
+		return nil, err
 	}
 
 	reader := get.Body(azblob.RetryReaderOptions{})

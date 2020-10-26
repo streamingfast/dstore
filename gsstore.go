@@ -89,6 +89,10 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 
 	reader, err := s.client.Bucket(s.baseURL.Host).Object(path).NewReader(ctx)
 	if err != nil {
+		if err ==  storage.ErrObjectNotExist {
+			return nil, ErrNotFound
+		}
+
 		return nil, err
 	}
 

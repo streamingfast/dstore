@@ -142,6 +142,9 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 
 	file, err := os.Open(path)
 	if err != nil {
+		if strings.ContainsAny(err.Error(), "no such file or directory") {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 

@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var ErrNotFound = errors.New("not found")
+
 type Store interface {
 	OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error)
 	FileExists(ctx context.Context, base string) (bool, error)

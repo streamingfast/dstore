@@ -203,6 +203,9 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		Key:    &path,
 	})
 	if err != nil {
+		if err.Error() == "no suck key" {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 
