@@ -136,7 +136,7 @@ func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.Rea
 		}
 
 		filename = filepath.Base(url.Path)
-		url.Path = filepath.Dir(url.Path)
+		url.Path = strings.TrimSuffix(filepath.Dir(url.Path), "/")
 		storeURL = url.String()
 	}
 
