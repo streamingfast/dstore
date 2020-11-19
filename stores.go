@@ -115,13 +115,13 @@ func AllowOverwrite() Option {
 	})
 }
 
-// OpenObject directly opens the giving file URL by parsing the file url, extracting the
-// path and the filename from it, creating the store interface, opening the object directly
-// and returning all this.
+// NewStoreFromURL is similar from `NewStore` but infer the store URL path from the URL directly
+// extracting the filename along the way. The store's path is always the directory containing the file
+// itself.
 //
 // This is a shortcut helper function that make it simpler to get store from a single file
 // url.
-func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.ReadCloser, store Store, filename string, err error) {
+func NewStoreFromURL(fileURL string, opts ...Option) (store Store, filename string, err error) {
 	var storeURL string
 	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
 		zlog.Info("file url is a local existing file")
@@ -132,7 +132,7 @@ func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.Rea
 		zlog.Info("file url assumed to be a store url with a scheme")
 		url, err := url.Parse(fileURL)
 		if err != nil {
-			return nil, store, "", fmt.Errorf("parse file url: %w", err)
+			return store, "", fmt.Errorf("parse file url: %w", err)
 		}
 
 		filename = filepath.Base(url.Path)
@@ -148,7 +148,23 @@ func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.Rea
 
 	store, err = NewStore(storeURL, "", config.compression, config.overwrite)
 	if err != nil {
-		return nil, nil, filename, fmt.Errorf("open store: %w", err)
+		return nil, filename, fmt.Errorf("open store: %w", err)
+	}
+
+	return store, filename, nil
+}
+
+// OpenObject directly opens the giving file URL by parsing the file url, extracting the
+// path and the filename from it, creating the store interface, opening the object directly
+// and returning all this.
+//
+// This is a shortcut helper function that make it simpler to get store from a single file
+// url.
+func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.ReadCloser, store Store, filename string, err error) {
+	store, filename, err = NewStoreFromURL(fileURL, opts...)
+	if err != nil {
+		err = fmt.Errorf("new store: %w", err)
+		return
 	}
 
 	out, err = store.OpenObject(ctx, filename)
