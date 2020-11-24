@@ -3,11 +3,21 @@ package storetests
 import (
 	"testing"
 
+	"github.com/dfuse-io/dstore"
 	"github.com/stretchr/testify/assert"
 )
 
 var openObjectTests = []StoreTestFunc{
 	TestOpenObject_ReadSameFileMultipleTimes,
+}
+
+func TestOpenObject_ErrNotFound(t *testing.T, factory StoreFactory) {
+	store, cleanup := factory()
+	defer cleanup()
+
+	rd, err := store.OpenObject(ctx, "anything_that_does_not_exist")
+	assert.Nil(t, rd)
+	assert.Equal(t, dstore.ErrNotFound, err)
 }
 
 func TestOpenObject_ReadSameFileMultipleTimes(t *testing.T, factory StoreFactory) {

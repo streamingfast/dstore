@@ -89,7 +89,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 
 	reader, err := s.client.Bucket(s.baseURL.Host).Object(path).NewReader(ctx)
 	if err != nil {
-		if err ==  storage.ErrObjectNotExist {
+		if err == storage.ErrObjectNotExist {
 			return nil, ErrNotFound
 		}
 
@@ -112,6 +112,7 @@ func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
 		if err == storage.ErrObjectNotExist {
 			return false, nil
 		}
+
 		return false, err
 	}
 	return true, nil
