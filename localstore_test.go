@@ -3,6 +3,7 @@ package dstore
 import (
 	"context"
 	"math"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestNewLocalStore_SanitizeLocalPath(t *testing.T) {
-	store, err := NewLocalStore("./storetests", "go", "", false)
+	store, err := NewLocalStore(&url.URL{Scheme: "", Path: "./storetests"}, "go", "", false)
 	require.NoError(t, err)
 
 	files, err := store.ListFiles(context.Background(), "", "", math.MaxInt64)
@@ -18,9 +19,8 @@ func TestNewLocalStore_SanitizeLocalPath(t *testing.T) {
 	assert.True(t, len(files) > 0, "Expecting more than one file to be found, got %d", len(files))
 }
 
-
 func TestNewLocalStore_OpenObject_notFound(t *testing.T) {
-	store, err := NewLocalStore("/tmp/storage/", "", "", false)
+	store, err := NewLocalStore(&url.URL{Scheme: "", Path: "/tmp/storage/"}, "", "", false)
 	require.NoError(t, err)
 
 	_, err = store.OpenObject(context.Background(), "foo.txt")

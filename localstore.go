@@ -24,12 +24,11 @@ type LocalStore struct {
 }
 
 func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*LocalStore, error) {
-	basePath := baseURL.Path
-	if !strings.HasPrefix(basePath, "file://") {
-		originalBasePath := basePath
-		basePath = filepath.Clean(basePath)
-		zlog.Info("sanitized base path", zap.String("original_base_path", originalBasePath), zap.String("sanitized_base_path", basePath))
-	}
+	basePath := filepath.Clean(baseURL.Path)
+	zlog.Info("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
+
+	myBaseURL := *baseURL
+	myBaseURL.Scheme = "file"
 
 	info, err := os.Stat(basePath)
 	if err != nil {
@@ -42,7 +41,7 @@ func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrit
 
 	return &LocalStore{
 		basePath: basePath,
-		baseURL:  baseURL,
+		baseURL:  &myBaseURL,
 		commonStore: &commonStore{
 			compressionType: compressionType,
 			extension:       extension,

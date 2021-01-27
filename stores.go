@@ -17,10 +17,6 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type Store interface {
-	// Used to retrieve original query parameters, allowing further
-	// configurability of the consumers of this store.
-	BaseURL() *url.URL
-
 	OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error)
 	FileExists(ctx context.Context, base string) (bool, error)
 	ObjectPath(base string) string
@@ -35,6 +31,10 @@ type Store interface {
 	ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error)
 
 	DeleteObject(ctx context.Context, base string) error
+
+	// Used to retrieve original query parameters, allowing further
+	// configurability of the consumers of this store.
+	BaseURL() *url.URL
 }
 
 var StopIteration = errors.New("stop iteration")
@@ -66,6 +66,7 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 		return nil, err
 	}
 
+	// file://superbob
 	switch base.Scheme {
 	case "gs":
 		return NewGSStore(base, extension, compressionType, overwrite)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net/url"
 	"os"
 	"path"
 	"testing"
@@ -44,7 +45,7 @@ func createlocalStoreFactory(t *testing.T, compression string) StoreFactory {
 			os.RemoveAll(dir)
 		}
 
-		store, err := dstore.NewLocalStore(dir, "", compression, false)
+		store, err := dstore.NewLocalStore(&url.URL{Scheme: "file", Path: dir}, "", compression, false)
 		require.NoError(t, err)
 
 		return store, func() {
