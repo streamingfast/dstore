@@ -57,11 +57,15 @@ func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrit
 	}, nil
 }
 
-func (a AzureStore) ObjectPath(name string) string {
+func (s *AzureStore) BaseURL() *url.URL {
+	return s.baseURL
+}
+
+func (a *AzureStore) ObjectPath(name string) string {
 	return path.Join(strings.TrimLeft(a.baseURL.Path, "/"), a.pathWithExt(name))
 }
 
-func (a AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
+func (a *AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
 	path := a.ObjectPath(base)
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
@@ -81,7 +85,7 @@ func (a AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
 	return true, nil
 }
 
-func (a AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := a.ObjectPath(base)
 
 	exists, err := a.FileExists(ctx, base)
@@ -129,7 +133,7 @@ func (a AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 	return nil
 }
 
-func (a AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	path := a.ObjectPath(name)
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
@@ -148,7 +152,7 @@ func (a AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 	return a.uncompressedReader(reader)
 }
 
-func (a AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
+func (a *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
 	remove, err := pushLocalFile(ctx, a, localFile, toBaseName)
 	if err != nil {
 		return err
@@ -156,7 +160,7 @@ func (a AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName str
 	return remove()
 }
 
-func (a AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {
+func (a *AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {
 
 	p := strings.TrimLeft(a.baseURL.Path, "/") + "/"
 	if prefix != "" {
@@ -193,7 +197,7 @@ func (a AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fun
 	return nil
 }
 
-func (a AzureStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
+func (a *AzureStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
 	return listFiles(ctx, a, prefix, ignoreSuffix, max)
 }
 

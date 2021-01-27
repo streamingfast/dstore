@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,11 +18,13 @@ import (
 //
 
 type LocalStore struct {
+	baseURL  *url.URL
 	basePath string
 	*commonStore
 }
 
-func NewLocalStore(basePath, extension, compressionType string, overwrite bool) (*LocalStore, error) {
+func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*LocalStore, error) {
+	basePath := baseURL.Path
 	if !strings.HasPrefix(basePath, "file://") {
 		originalBasePath := basePath
 		basePath = filepath.Clean(basePath)
@@ -39,12 +42,17 @@ func NewLocalStore(basePath, extension, compressionType string, overwrite bool) 
 
 	return &LocalStore{
 		basePath: basePath,
+		baseURL:  baseURL,
 		commonStore: &commonStore{
 			compressionType: compressionType,
 			extension:       extension,
 			overwrite:       overwrite,
 		},
 	}, nil
+}
+
+func (s *LocalStore) BaseURL() *url.URL {
+	return s.baseURL
 }
 
 func (s *LocalStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {

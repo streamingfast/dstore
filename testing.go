@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"net/url"
 	"path"
 	"sort"
 	"strings"
@@ -26,6 +27,10 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 		files:     make(map[string][]byte),
 		writeFunc: writeFunc,
 	}
+}
+
+func (s *MockStore) BaseURL() *url.URL {
+	return &url.URL{Scheme: "mock", Path: "/mock"}
 }
 
 // WriteFiles dumps currently know file

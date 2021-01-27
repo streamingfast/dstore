@@ -17,6 +17,10 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type Store interface {
+	// Used to retrieve original query parameters, allowing further
+	// configurability of the consumers of this store.
+	BaseURL() *url.URL
+
 	OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error)
 	FileExists(ctx context.Context, base string) (bool, error)
 	ObjectPath(base string) string
@@ -70,10 +74,10 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 	case "s3":
 		return NewS3Store(base, extension, compressionType, overwrite)
 	case "file":
-		return NewLocalStore(base.Path, extension, compressionType, overwrite)
+		return NewLocalStore(base, extension, compressionType, overwrite)
 	case "":
 		// If scheme is empty, let's assume baseURL was a absolute/relative path without being an actual URL
-		return NewLocalStore(baseURL, extension, compressionType, overwrite)
+		return NewLocalStore(base, extension, compressionType, overwrite)
 	}
 
 	return nil, fmt.Errorf("archive store only supports, file://, gs:// or local path")

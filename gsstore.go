@@ -41,6 +41,10 @@ func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite b
 	}, nil
 }
 
+func (s *GSStore) BaseURL() *url.URL {
+	return s.baseURL
+}
+
 func (s *GSStore) ObjectPath(name string) string {
 	return path.Join(strings.TrimLeft(s.baseURL.Path, "/"), s.pathWithExt(name))
 }

@@ -30,6 +30,8 @@ func init() {
 }
 
 type S3Store struct {
+	baseURL *url.URL
+
 	bucket   string
 	path     string
 	service  *s3.S3
@@ -41,6 +43,7 @@ type S3Store struct {
 
 func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite bool) (*S3Store, error) {
 	s := &S3Store{
+		baseURL: baseURL,
 		commonStore: &commonStore{
 			compressionType: compressionType,
 			extension:       extension,
@@ -129,6 +132,10 @@ func hasCustomEndpoint(s3URL *url.URL) bool {
 	}
 
 	return true
+}
+
+func (s *S3Store) BaseURL() *url.URL {
+	return s.baseURL
 }
 
 func (s *S3Store) ObjectPath(name string) string {
