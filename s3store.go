@@ -143,7 +143,7 @@ func (s *S3Store) ObjectPath(name string) string {
 }
 
 func (s *S3Store) ObjectURL(name string) string {
-	return path.Join(s.baseURL.String(), s.pathWithExt(name))
+	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
 }
 
 

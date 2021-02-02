@@ -171,7 +171,7 @@ func (s *LocalStore) ObjectPath(name string) string {
 }
 
 func (s *LocalStore) ObjectURL(name string) string {
-	return path.Join(s.baseURL.String(), s.pathWithExt(name))
+	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
 }
 
 func (s *LocalStore) DeleteObject(ctx context.Context, base string) error {

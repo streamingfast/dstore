@@ -2,6 +2,7 @@ package dstore
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -50,7 +51,7 @@ func (s *GSStore) ObjectPath(name string) string {
 }
 
 func (s *GSStore) ObjectURL(name string) string {
-	return path.Join(s.baseURL.String(), s.pathWithExt(name))
+	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
 }
 
 func (s *GSStore) toBaseName(filename string) string {
