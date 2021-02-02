@@ -66,7 +66,7 @@ func (a *AzureStore) ObjectPath(name string) string {
 }
 
 func (a *AzureStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
+	return fmt.Sprintf("%s/%s", strings.TrimRight(a.baseURL.String(), "/"), strings.TrimLeft(a.pathWithExt(name), "/"))
 }
 
 
