@@ -12,10 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//accountName := "dfuseandbox"
-
-//container := "demo"
-
 func Test_decodeAzureScheme(t *testing.T) {
 	tests := []struct {
 		name                string

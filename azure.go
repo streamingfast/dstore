@@ -65,6 +65,11 @@ func (a *AzureStore) ObjectPath(name string) string {
 	return path.Join(strings.TrimLeft(a.baseURL.Path, "/"), a.pathWithExt(name))
 }
 
+func (a *AzureStore) ObjectURL(name string) string {
+	return path.Join(a.baseURL.String(), a.pathWithExt(name))
+}
+
+
 func (a *AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
 	path := a.ObjectPath(base)
 

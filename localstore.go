@@ -170,6 +170,10 @@ func (s *LocalStore) ObjectPath(name string) string {
 	return path.Join(s.basePath, s.pathWithExt(name))
 }
 
+func (s *LocalStore) ObjectURL(name string) string {
+	return path.Join(s.baseURL.String(), s.pathWithExt(name))
+}
+
 func (s *LocalStore) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
 	return os.Remove(path)

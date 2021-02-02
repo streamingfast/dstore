@@ -49,6 +49,10 @@ func (s *GSStore) ObjectPath(name string) string {
 	return path.Join(strings.TrimLeft(s.baseURL.Path, "/"), s.pathWithExt(name))
 }
 
+func (s *GSStore) ObjectURL(name string) string {
+	return path.Join(s.baseURL.String(), s.pathWithExt(name))
+}
+
 func (s *GSStore) toBaseName(filename string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), strings.TrimLeft(s.baseURL.Path, "/")+"/")
 }

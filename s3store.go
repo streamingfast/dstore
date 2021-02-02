@@ -142,6 +142,11 @@ func (s *S3Store) ObjectPath(name string) string {
 	return path.Join(s.path, s.pathWithExt(name))
 }
 
+func (s *S3Store) ObjectURL(name string) string {
+	return path.Join(s.baseURL.String(), s.pathWithExt(name))
+}
+
+
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := s.ObjectPath(base)
 

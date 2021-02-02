@@ -106,6 +106,11 @@ func (m *MockStore) ObjectPath(base string) string {
 	return base
 }
 
+func (m *MockStore) ObjectURL(base string) string {
+	return base
+}
+
+
 func (m *MockStore) DeleteObject(ctx context.Context, base string) error {
 	zlog.Debug("deleting object", zap.String("name", base))
 	delete(m.files, base)
