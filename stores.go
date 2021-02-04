@@ -10,8 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"go.uber.org/zap"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -130,12 +128,10 @@ func AllowOverwrite() Option {
 func NewStoreFromURL(fileURL string, opts ...Option) (store Store, filename string, err error) {
 	var storeURL string
 	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
-		zlog.Debug("file url is a local existing file")
 		sanitizedURL := filepath.Clean(fileURL)
 		filename = filepath.Base(sanitizedURL)
 		storeURL = filepath.Dir(sanitizedURL)
 	} else {
-		zlog.Debug("file url assumed to be a store url with a scheme")
 		url, err := url.Parse(fileURL)
 		if err != nil {
 			return store, "", fmt.Errorf("parse file url: %w", err)
@@ -146,7 +142,6 @@ func NewStoreFromURL(fileURL string, opts ...Option) (store Store, filename stri
 		storeURL = url.String()
 	}
 
-	zlog.Debug("creating store", zap.String("store_url", storeURL), zap.String("filename", filename))
 	config := config{}
 	for _, opt := range opts {
 		opt.apply(&config)
