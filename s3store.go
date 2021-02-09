@@ -222,7 +222,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		Key:    &path,
 	})
 	if err != nil {
-		if err.Error() == "no suck key" {
+		if err.Error() == "no such key" {
 			return nil, ErrNotFound
 		}
 		return nil, err
@@ -235,7 +235,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		if err := reader.Body.Close(); err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bytes.NewReader(data)), nil
+		return s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
 	}
 	return s.uncompressedReader(reader.Body)
 }
