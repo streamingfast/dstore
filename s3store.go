@@ -1,9 +1,11 @@
 package dstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -21,11 +23,17 @@ import (
 )
 
 var retryS3PushLocalFilesDelay time.Duration
+var bufferedS3Read bool
 
 func init() {
 	retry := os.Getenv("DSTORE_S3_RETRY_PUSH_DELAY")
 	if retry != "" {
 		retryS3PushLocalFilesDelay, _ = time.ParseDuration(retry)
+		zlog.Info("S3 configured with push_local_files_delay", zap.Duration("retry_s3_push_local_files_delay", retryS3PushLocalFilesDelay))
+	}
+	if os.Getenv("DSTORE_S3_BUFFERED_READ") == "true" {
+		zlog.Info("S3 configured with buffered read")
+		bufferedS3Read = true
 	}
 }
 
@@ -146,7 +154,6 @@ func (s *S3Store) ObjectURL(name string) string {
 	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
 }
 
-
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := s.ObjectPath(base)
 
@@ -220,7 +227,16 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		}
 		return nil, err
 	}
-
+	if bufferedS3Read {
+		data, err := ioutil.ReadAll(reader.Body)
+		if err != nil {
+			return nil, err
+		}
+		if err := reader.Body.Close(); err != nil {
+			return nil, err
+		}
+		return ioutil.NopCloser(bytes.NewReader(data)), nil
+	}
 	return s.uncompressedReader(reader.Body)
 }
 
