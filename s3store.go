@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,18 +24,31 @@ import (
 )
 
 var retryS3PushLocalFilesDelay time.Duration
+var s3ReadAttempts = 1
 var bufferedS3Read bool
 
 func init() {
 	retry := os.Getenv("DSTORE_S3_RETRY_PUSH_DELAY")
 	if retry != "" {
 		retryS3PushLocalFilesDelay, _ = time.ParseDuration(retry)
-		zlog.Info("S3 configured with push_local_files_delay", zap.Duration("retry_s3_push_local_files_delay", retryS3PushLocalFilesDelay))
 	}
 	if os.Getenv("DSTORE_S3_BUFFERED_READ") == "true" {
-		zlog.Info("S3 configured with buffered read")
 		bufferedS3Read = true
 	}
+
+	readAttempts := os.Getenv("DSTORE_S3_READ_ATTEMPTS")
+	if readAttempts != "" {
+		attempts, _ := strconv.ParseUint(readAttempts, 10, 64)
+		if attempts > 0 {
+			s3ReadAttempts = int(attempts)
+		}
+	}
+	zlog.Info("S3 storage configured",
+		zap.Bool("buffered_read", bufferedS3Read),
+		zap.Int("read_attempts", s3ReadAttempts),
+		zap.Duration("retry_push_local_files_delay", retryS3PushLocalFilesDelay),
+	)
+
 }
 
 type S3Store struct {
@@ -214,30 +228,40 @@ func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 	return true, nil
 }
 
-func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+func (s *S3Store) OpenObject(ctx context.Context, name string) (io.ReadCloser, error) {
 	path := s.ObjectPath(name)
 
-	reader, err := s.service.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    &path,
-	})
-	if err != nil {
-		if err.Error() == "no such key" {
-			return nil, ErrNotFound
+	var err error
+	for i := 0; i < s3ReadAttempts; i++ {
+		if i > 0 { // small wait on retry
+			zlog.Warn("got an error on s3 OpenObject, retrying", zap.Error(err), zap.Int("attempt", i), zap.Int("max_attempts", s3ReadAttempts))
+			time.Sleep(500 * time.Millisecond)
 		}
-		return nil, err
-	}
-	if bufferedS3Read {
-		data, err := ioutil.ReadAll(reader.Body)
+		var reader *s3.GetObjectOutput
+		reader, err = s.service.GetObjectWithContext(ctx, &s3.GetObjectInput{
+			Bucket: aws.String(s.bucket),
+			Key:    &path,
+		})
 		if err != nil {
-			return nil, err
+			if err.Error() == "no such key" {
+				err = ErrNotFound
+			}
+			continue
 		}
-		if err := reader.Body.Close(); err != nil {
-			return nil, err
+		if bufferedS3Read {
+			var data []byte
+			data, err = ioutil.ReadAll(reader.Body)
+			if err != nil {
+				continue
+			}
+			if err = reader.Body.Close(); err != nil {
+				continue
+			}
+			return s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
 		}
-		return s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
+		return s.uncompressedReader(reader.Body)
 	}
-	return s.uncompressedReader(reader.Body)
+	return nil, fmt.Errorf("s3 open object (%d attempts, buffered_read: %v): %w", s3ReadAttempts, bufferedS3Read, err)
 }
 
 func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
