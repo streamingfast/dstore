@@ -11,5 +11,5 @@ var traceEnabled = os.Getenv("TRACE") == "true"
 var zlog *zap.Logger
 
 func init() {
-	logging.Register("github.com/dfuse-io/dstore", &zlog)
+	logging.Register("github.com/streamingfast/dstore", &zlog)
 }

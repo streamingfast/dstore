@@ -1,6 +1,6 @@
-module github.com/dfuse-io/dstore
+module github.com/streamingfast/dstore
 
-go 1.12
+go 1.15
 
 require (
 	cloud.google.com/go v0.50.0 // indirect

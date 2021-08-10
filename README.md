@@ -1,12 +1,12 @@
-# dfuse Storage Abstraction
-[![reference](https://img.shields.io/badge/godoc-reference-5272B4.svg?style=flat-square)](https://pkg.go.dev/github.com/dfuse-io/dstore)
+# StreamingFast Storage Abstraction
+[![reference](https://img.shields.io/badge/godoc-reference-5272B4.svg?style=flat-square)](https://pkg.go.dev/github.com/streamingfast/dstore)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 `dstore` is a simple abstraction on top of Local storage and Cloud
 storage. It handles commonly used functions to store things (locally,
 or on cloud storage providers), list files, delete, etc..
 
-It is used by **[dfuse](https://github.com/dfuse-io/dfuse)**.
+It is used by **[StreamingFast](https://github.com/streamingfast/streamingfast)**.
 
 ## Features
 
@@ -40,13 +40,12 @@ minio server .
 Ensure you have access to GCP Storage Bucket, S3 Bucket, then run the full test suite:
 
 ```bash
-STORETESTS_GS_STORE_URL="gs://dfuse-developement-random/store-tests"\
-STORETESTS_S3_STORE_URL="s3://dfuse-customer-outbox/store-tests?region=us-east-2"\
+STORETESTS_GS_STORE_URL="gs://streamingfast-developement-random/store-tests"\
+STORETESTS_S3_STORE_URL="s3://streamingfast-customer-outbox/store-tests?region=us-east-2"\
 STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
 STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin" # this bucket MUST be empty for the test to run
 go test ./...
 ```
-
 ## Contributing
 
 **Issues and PR in this repo related strictly to the dstore library.**
@@ -61,3 +60,4 @@ if you wish to contribute to this code base.
 ## License
 
 [Apache 2.0](LICENSE)
+

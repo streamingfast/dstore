@@ -3,7 +3,7 @@ package storetests
 import (
 	"testing"
 
-	"github.com/dfuse-io/dstore"
+	"github.com/streamingfast/dstore"
 )
 
 func TestMockStore(t *testing.T) {
