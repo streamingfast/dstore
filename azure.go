@@ -22,7 +22,6 @@ type AzureStore struct {
 }
 
 func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*AzureStore, error) {
-
 	accountName, containerName, err := decodeAzureScheme(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("specify azure account name and container like: az://account.container/path")
@@ -69,12 +68,11 @@ func (a *AzureStore) ObjectURL(name string) string {
 	return fmt.Sprintf("%s/%s", strings.TrimRight(a.baseURL.String(), "/"), strings.TrimLeft(a.pathWithExt(name), "/"))
 }
 
-
 func (a *AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
 	path := a.ObjectPath(base)
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
-	_, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{})
+	_, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
 
 		// azure returns a 404 error when blob NOT FOUND
@@ -143,9 +141,9 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
 
-	get, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false)
+	get, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
-		if err.Error() ==  string(azblob.ServiceCodeBlobNotFound) {
+		if err.Error() == string(azblob.ServiceCodeBlobNotFound) {
 			return nil, ErrNotFound
 		}
 
