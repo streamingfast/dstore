@@ -234,7 +234,13 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (io.ReadCloser, e
 	var err error
 	for i := 0; i < s3ReadAttempts; i++ {
 		if i > 0 { // small wait on retry
-			zlog.Warn("got an error on s3 OpenObject, retrying", zap.Error(err), zap.Int("attempt", i), zap.Int("max_attempts", s3ReadAttempts))
+			zlog.Warn("got an error on s3 OpenObject, retrying",
+				zap.Error(err),
+				zap.Int("attempt", i),
+				zap.Int("max_attempts", s3ReadAttempts),
+				zap.String("name", name),
+				zap.String("path", path),
+			)
 			time.Sleep(500 * time.Millisecond)
 		}
 		var reader *s3.GetObjectOutput
