@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -110,7 +110,6 @@ func (m *MockStore) ObjectURL(base string) string {
 	return base
 }
 
-
 func (m *MockStore) DeleteObject(ctx context.Context, base string) error {
 	zlog.Debug("deleting object", zap.String("name", base))
 	delete(m.files, base)
@@ -147,6 +146,9 @@ func (m *MockStore) Walk(ctx context.Context, prefix, _ string, f func(filename 
 
 	for _, file := range sortedFiles {
 		zlog.Debug("walking file", zap.String("file", file), zap.Bool("has_prefix", strings.HasPrefix(file, prefix)))
+		if strings.Contains(file, "err") {
+			return fmt.Errorf("mock err, %s", file)
+		}
 		if strings.HasPrefix(file, prefix) {
 			if err := f(file); err != nil {
 				if err == StopIteration {
