@@ -15,6 +15,7 @@ var walkTests = []StoreTestFunc{
 	TestWalk_IgnoreNotFound,
 	TestWalk_FilePrefix,
 	TestWalk_PathPrefix,
+	TestWalkFrom,
 }
 
 func TestWalk_IgnoreNotFound(t *testing.T, factory StoreFactory) {
@@ -36,6 +37,29 @@ func TestWalk_FilePrefix(t *testing.T, factory StoreFactory) {
 
 	var seen []string
 	err := store.Walk(ctx, "0000", "", func(f string) error {
+		seen = append(seen, f)
+		exists, err := store.FileExists(ctx, f)
+		assert.NoError(t, err)
+		assert.True(t, exists)
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.EqualValues(t, expected, seen)
+}
+
+func TestWalkFrom(t *testing.T, factory StoreFactory) {
+	store, cleanup := factory()
+	defer cleanup()
+
+	written := []string{"00000001", "00000002", "00000003", "00000004"}
+	for _, f := range written {
+		addFileToStore(t, store, f, f)
+	}
+	expected := []string{"00000002", "00000003", "00000004"}
+
+	var seen []string
+	err := store.WalkFrom(ctx, "", "00000002", func(f string) error {
 		seen = append(seen, f)
 		exists, err := store.FileExists(ctx, f)
 		assert.NoError(t, err)

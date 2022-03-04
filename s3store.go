@@ -270,6 +270,10 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (io.ReadCloser, e
 	return nil, fmt.Errorf("s3 open object (%d attempts, buffered_read: %v): %w", s3ReadAttempts, bufferedS3Read, err)
 }
 
+func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
+}
+
 func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
 	targetPrefix := s.path
 	if targetPrefix != "" {

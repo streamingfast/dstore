@@ -163,6 +163,10 @@ func (a *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName st
 	return remove()
 }
 
+func (s *AzureStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
+}
+
 func (a *AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {
 
 	p := strings.TrimLeft(a.baseURL.Path, "/") + "/"

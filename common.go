@@ -30,6 +30,20 @@ func (c *commonStore) pathWithExt(base string) string {
 	return base
 }
 
+func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	var gatePassed bool
+	return store.Walk(ctx, prefix, "", func(filename string) error {
+		if gatePassed {
+			return f(filename)
+		}
+		if filename >= startingPoint {
+			gatePassed = true
+			return f(filename)
+		}
+		return nil
+	})
+}
+
 func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName string) (removeFunc func() error, err error) {
 	f, err := os.Open(localFile)
 	if err != nil {

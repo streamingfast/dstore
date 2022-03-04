@@ -26,6 +26,8 @@ type Store interface {
 	Overwrite() bool
 	SetOverwrite(enabled bool)
 
+	WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error
+
 	Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error
 	ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error)
 

@@ -140,6 +140,10 @@ func (s *GSStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, ma
 }
 
 func (s *GSStore) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
+	return s.WalkFrom(ctx, prefix, "", f)
+}
+
+func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	q := &storage.Query{}
 	q.Prefix = strings.TrimLeft(s.baseURL.Path, "/") + "/"
 	if prefix != "" {
@@ -149,6 +153,9 @@ func (s *GSStore) Walk(ctx context.Context, prefix, _ string, f func(filename st
 		if prefix[len(prefix)-1:] == "/" {
 			q.Prefix = q.Prefix + "/"
 		}
+	}
+	if startingPoint != "" {
+		q.StartOffset = filepath.Join(q.Prefix, startingPoint)
 	}
 	it := s.client.Bucket(s.baseURL.Host).Objects(ctx, q)
 

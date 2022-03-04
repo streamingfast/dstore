@@ -140,6 +140,10 @@ func (s *MockStore) SetOverwrite(in bool) {
 	return
 }
 
+func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
+}
+
 func (m *MockStore) Walk(ctx context.Context, prefix, _ string, f func(filename string) error) error {
 	zlog.Debug("walking files", zap.String("prefix", prefix))
 	sortedFiles := m.sortedFiles()

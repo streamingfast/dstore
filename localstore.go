@@ -58,6 +58,10 @@ func (s *LocalStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string,
 	return listFiles(ctx, s, prefix, ignoreSuffix, max)
 }
 
+func (s *LocalStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
+}
+
 func (s *LocalStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {
 	fullPath := s.basePath + "/"
 	if prefix != "" {
