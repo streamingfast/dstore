@@ -47,16 +47,15 @@ func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint stri
 func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName string) (removeFunc func() error, err error) {
 	f, err := os.Open(localFile)
 	if err != nil {
-		return nil, fmt.Errorf("opening local file %q: %s", localFile, err)
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
 	objPath := store.ObjectPath(toBaseName)
 
-	// The file doesn't exist, let's continue.
 	err = store.WriteObject(ctx, toBaseName, f)
 	if err != nil {
-		return nil, fmt.Errorf("writing %q to storage %q: %s", localFile, objPath, err)
+		return nil, fmt.Errorf("writing %q to storage %q: %w", localFile, objPath, err)
 	}
 
 	return func() error {
@@ -116,14 +115,14 @@ func (c *commonStore) uncompressedReader(reader io.ReadCloser) (out io.ReadClose
 	case "gzip":
 		gzipReader, err := NewGZipReadCloser(reader)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create gzip reader: %s", err)
+			return nil, fmt.Errorf("unable to create gzip reader: %w", err)
 		}
 
 		return gzipReader, nil
 	case "zstd":
 		zstdReader, err := zstd.NewReader(reader)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create zstd reader: %s", err)
+			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
 		}
 
 		return zstdReader.IOReadCloser(), nil

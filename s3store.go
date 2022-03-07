@@ -202,9 +202,9 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	})
 	if err != nil {
 		if err2 := <-writeDone; err2 != nil {
-			return fmt.Errorf("writing through pipe: %s", err2)
+			return fmt.Errorf("writing through pipe: %w", err2)
 		}
-		return fmt.Errorf("uploading to S3 through manager: %s", err)
+		return fmt.Errorf("uploading to S3 through manager: %w", err)
 	}
 
 	return nil
@@ -309,10 +309,10 @@ func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename st
 		return true
 	})
 	if err != nil {
-		return fmt.Errorf("listing objects: %s", err)
+		return fmt.Errorf("listing objects: %w", err)
 	}
 	if innerErr != nil {
-		return fmt.Errorf("processing object list: %s", innerErr)
+		return fmt.Errorf("processing object list: %w", innerErr)
 	}
 
 	return nil

@@ -16,17 +16,23 @@ import (
 )
 
 type MockStore struct {
-	files     map[string][]byte
-	writeFunc func(base string, f io.Reader) (err error)
-
+	files           map[string][]byte
 	shouldOverwrite bool
+
+	// Add other methods as usage grows...
+	PushLocalFileFunc func(ctx context.Context, localFile string, toBaseName string) (err error)
+	WriteObjectFunc   func(ctx context.Context, base string, f io.Reader) error
 }
 
 func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockStore {
-	return &MockStore{
-		files:     make(map[string][]byte),
-		writeFunc: writeFunc,
+	store := &MockStore{files: make(map[string][]byte)}
+	if writeFunc != nil {
+		store.WriteObjectFunc = func(ctx context.Context, base string, f io.Reader) error {
+			return writeFunc(base, f)
+		}
 	}
+
+	return store
 }
 
 func (s *MockStore) BaseURL() *url.URL {
@@ -73,8 +79,8 @@ func (m *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 }
 
 func (m *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
-	if m.writeFunc != nil {
-		return m.writeFunc(base, f)
+	if m.WriteObjectFunc != nil {
+		return m.WriteObjectFunc(ctx, base, f)
 	}
 
 	zlog.Debug("writing object", zap.String("name", base))
@@ -179,7 +185,15 @@ func (m *MockStore) sortedFiles() []string {
 }
 
 func (m *MockStore) PushLocalFile(ctx context.Context, localFile string, toBaseName string) (err error) {
-	return nil
+	if m.PushLocalFileFunc != nil {
+		return m.PushLocalFileFunc(ctx, localFile, toBaseName)
+	}
+
+	remove, err := pushLocalFile(ctx, m, localFile, toBaseName)
+	if err != nil {
+		return err
+	}
+	return remove()
 }
 
 func (m *MockStore) Overwrite() bool {

@@ -33,7 +33,7 @@ func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrit
 	info, err := os.Stat(basePath)
 	if err != nil {
 		if err := os.MkdirAll(basePath, os.ModePerm); err != nil {
-			return nil, fmt.Errorf("unable to create base path %q: %s", basePath, err)
+			return nil, fmt.Errorf("unable to create base path %q: %w", basePath, err)
 		}
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("received base path is a file, expecting it to be a directory")
@@ -122,12 +122,12 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 
 	targetDir := filepath.Dir(tempPath)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return fmt.Errorf("ensuring directory exists (mkdir -p) %q: %s", targetDir, err)
+		return fmt.Errorf("ensuring directory exists (mkdir -p) %q: %w", targetDir, err)
 	}
 
 	file, err := os.Create(tempPath)
 	if err != nil {
-		return fmt.Errorf("unable to create file %q: %s", tempPath, err)
+		return fmt.Errorf("unable to create file %q: %w", tempPath, err)
 	}
 
 	err = func() (err error) {
@@ -142,7 +142,7 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 	}
 
 	if err := os.Rename(tempPath, destPath); err != nil {
-		return fmt.Errorf("rename: %s", err)
+		return fmt.Errorf("rename: %w", err)
 	}
 
 	return nil
