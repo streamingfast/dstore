@@ -286,7 +286,7 @@ func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename st
 		}
 	}
 
-	if traceEnabled {
+	if tracer.Enabled() {
 		zlog.Debug("walking files", zap.String("bucket", s.bucket), zap.String("prefix", targetPrefix))
 	}
 

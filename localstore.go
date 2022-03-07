@@ -74,7 +74,7 @@ func (s *LocalStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fu
 		walkPath = filepath.Dir(fullPath)
 	}
 
-	if traceEnabled {
+	if tracer.Enabled() {
 		zlog.Debug("walking files", zap.String("walk_path", walkPath))
 	}
 
