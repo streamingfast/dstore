@@ -19,9 +19,13 @@ type MockStore struct {
 	files           map[string][]byte
 	shouldOverwrite bool
 
-	// Add other methods as usage grows...
-	PushLocalFileFunc func(ctx context.Context, localFile string, toBaseName string) (err error)
+	OpenObjectFunc    func(ctx context.Context, name string) (out io.ReadCloser, err error)
 	WriteObjectFunc   func(ctx context.Context, base string, f io.Reader) error
+	DeleteObjectFunc  func(ctx context.Context, base string) error
+	FileExistsFunc    func(ctx context.Context, base string) (bool, error)
+	ListFilesFunc     func(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error)
+	WalkFunc          func(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) error) error
+	PushLocalFileFunc func(ctx context.Context, localFile string, toBaseName string) (err error)
 }
 
 func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockStore {
@@ -35,7 +39,7 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 	return store
 }
 
-func (s *MockStore) BaseURL() *url.URL {
+func (m *MockStore) BaseURL() *url.URL {
 	return &url.URL{Scheme: "mock", Path: "/mock"}
 }
 
@@ -60,6 +64,10 @@ func (m *MockStore) SetFile(name string, content []byte) {
 }
 
 func (m *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+	if m.OpenObjectFunc != nil {
+		return m.OpenObjectFunc(ctx, name)
+	}
+
 	zlog.Debug("opening object", zap.String("name", name))
 
 	content, exists := m.files[name]
@@ -117,12 +125,20 @@ func (m *MockStore) ObjectURL(base string) string {
 }
 
 func (m *MockStore) DeleteObject(ctx context.Context, base string) error {
+	if m.DeleteObjectFunc != nil {
+		return m.DeleteObjectFunc(ctx, base)
+	}
+
 	zlog.Debug("deleting object", zap.String("name", base))
 	delete(m.files, base)
 	return nil
 }
 
 func (m *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
+	if m.FileExistsFunc != nil {
+		return m.FileExistsFunc(ctx, base)
+	}
+
 	zlog.Debug("checking if file exists", zap.String("name", base))
 
 	content, exists := m.files[base]
@@ -137,20 +153,28 @@ func (m *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
 	return scnt != "err", nil
 }
 
-func (s *MockStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
-	return listFiles(ctx, s, prefix, ignoreSuffix, max)
+func (m *MockStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
+	if m.ListFilesFunc != nil {
+		return m.ListFilesFunc(ctx, prefix, ignoreSuffix, max)
+	}
+
+	return listFiles(ctx, m, prefix, ignoreSuffix, max)
 }
 
-func (s *MockStore) SetOverwrite(in bool) {
-	s.shouldOverwrite = in
+func (m *MockStore) SetOverwrite(in bool) {
+	m.shouldOverwrite = in
 	return
 }
 
-func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
-	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
+func (m *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return commonWalkFrom(m, ctx, prefix, startingPoint, f)
 }
 
-func (m *MockStore) Walk(ctx context.Context, prefix, _ string, f func(filename string) error) error {
+func (m *MockStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) error) error {
+	if m.WalkFunc != nil {
+		return m.WalkFunc(ctx, prefix, ignoreSuffix, f)
+	}
+
 	zlog.Debug("walking files", zap.String("prefix", prefix))
 	sortedFiles := m.sortedFiles()
 
