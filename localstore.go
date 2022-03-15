@@ -130,14 +130,10 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 		return fmt.Errorf("unable to create file %q: %w", tempPath, err)
 	}
 
-	err = func() (err error) {
-		defer func() {
-			err = file.Close()
-		}()
-
-		return s.compressedCopy(reader, file)
-	}()
-	if err != nil {
+	if err := s.compressedCopy(reader, file); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
 		return err
 	}
 
