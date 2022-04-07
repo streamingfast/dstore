@@ -186,13 +186,13 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
-		defer pipeWrite.Close()
-
 		err := s.compressedCopy(f, pipeWrite)
+		writeDone <- err
+		pipeWrite.Close() // required to allow the uploader to complete
+
 		if err != nil {
 			cancel()
 		}
-		writeDone <- err
 	}()
 
 	_, err = s.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
@@ -201,8 +201,15 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 		Body:   pipeRead,
 	})
 	if err != nil {
-		if err2 := <-writeDone; err2 != nil {
-			return fmt.Errorf("writing through pipe: %w", err2)
+		select {
+		case err2 := <-writeDone:
+			if err2 != nil {
+				return fmt.Errorf("writing through pipe: %w", err2)
+			}
+		default:
+			// error was generated in the Upload (s3 or context timeout), compressedCopy is not finished,
+			// we make it fail. double closing is safe here
+			pipeWrite.Close()
 		}
 		return fmt.Errorf("uploading to S3 through manager: %w", err)
 	}
