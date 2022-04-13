@@ -305,7 +305,12 @@ func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename st
 	var innerErr error
 	err := s.service.ListObjectsV2PagesWithContext(ctx, q, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 		for _, el := range page.Contents {
-			if err := f(s.toBaseName(*el.Key)); err != nil {
+			filename := s.toBaseName(*el.Key)
+			if filename == "" {
+				zlog.Warn("got an empty filename from s3 store, ignoring it", zap.String("key", *el.Key))
+				continue
+			}
+			if err := f(filename); err != nil {
 				if err == StopIteration {
 					return false
 				}
