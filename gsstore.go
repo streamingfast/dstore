@@ -41,6 +41,14 @@ func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite b
 		},
 	}, nil
 }
+func (s *GSStore) SubStore(subFolder string) (Store, error) {
+	url, err := url.Parse(s.baseURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("gs store parsing base url: %w", err)
+	}
+	url.Path = path.Join(url.Path, subFolder)
+	return NewGSStore(url, s.extension, s.compressionType, s.overwrite)
+}
 
 func (s *GSStore) BaseURL() *url.URL {
 	return s.baseURL

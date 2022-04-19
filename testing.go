@@ -16,9 +16,8 @@ import (
 )
 
 type MockStore struct {
-	files           map[string][]byte
-	shouldOverwrite bool
-
+	files             map[string][]byte
+	shouldOverwrite   bool
 	OpenObjectFunc    func(ctx context.Context, name string) (out io.ReadCloser, err error)
 	WriteObjectFunc   func(ctx context.Context, base string, f io.Reader) error
 	DeleteObjectFunc  func(ctx context.Context, base string) error
@@ -39,13 +38,32 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 	return store
 }
 
-func (m *MockStore) BaseURL() *url.URL {
+func (s *MockStore) SubStore(subFolder string) (Store, error) {
+	newFiles := map[string][]byte{}
+	for k, v := range s.files {
+		newFiles[subFolder+"/"+k] = v
+	}
+
+	return &MockStore{
+		files:             newFiles,
+		shouldOverwrite:   s.shouldOverwrite,
+		OpenObjectFunc:    s.OpenObjectFunc,
+		WriteObjectFunc:   s.WriteObjectFunc,
+		DeleteObjectFunc:  s.DeleteObjectFunc,
+		FileExistsFunc:    s.FileExistsFunc,
+		ListFilesFunc:     s.ListFilesFunc,
+		WalkFunc:          s.WalkFunc,
+		PushLocalFileFunc: s.PushLocalFileFunc,
+	}, nil
+}
+
+func (s *MockStore) BaseURL() *url.URL {
 	return &url.URL{Scheme: "mock", Path: "/mock"}
 }
 
 // WriteFiles dumps currently know file
-func (m *MockStore) WriteFiles(toDirectory string) error {
-	for name, content := range m.files {
+func (s *MockStore) WriteFiles(toDirectory string) error {
+	for name, content := range s.files {
 		if err := ioutil.WriteFile(path.Join(toDirectory, name), content, os.ModePerm); err != nil {
 			return fmt.Errorf("writing file %q: %w", name, err)
 		}
@@ -56,21 +74,21 @@ func (m *MockStore) WriteFiles(toDirectory string) error {
 
 // SetFile sets the content of a file. Set the value "err" to trigger
 // an error when reading this file.
-func (m *MockStore) SetFile(name string, content []byte) {
+func (s *MockStore) SetFile(name string, content []byte) {
 	isError := string(content) == "err"
 	zlog.Debug("adding file", zap.String("name", name), zap.Int("content_length", len(content)), zap.Bool("is_error", isError))
 
-	m.files[name] = content
+	s.files[name] = content
 }
 
-func (m *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	if m.OpenObjectFunc != nil {
-		return m.OpenObjectFunc(ctx, name)
+func (s *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+	if s.OpenObjectFunc != nil {
+		return s.OpenObjectFunc(ctx, name)
 	}
 
 	zlog.Debug("opening object", zap.String("name", name))
 
-	content, exists := m.files[name]
+	content, exists := s.files[name]
 	if !exists {
 		zlog.Debug("opening object not found", zap.String("name", name))
 		return nil, io.EOF
@@ -86,17 +104,17 @@ func (m *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 
 }
 
-func (m *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
-	if m.WriteObjectFunc != nil {
-		return m.WriteObjectFunc(ctx, base, f)
+func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+	if s.WriteObjectFunc != nil {
+		return s.WriteObjectFunc(ctx, base, f)
 	}
 
 	zlog.Debug("writing object", zap.String("name", base))
-	content, exists := m.files[base]
+	content, exists := s.files[base]
 	if !exists {
 		zlog.Debug("writing object not found, creating new one", zap.String("name", base))
 	} else {
-		if !m.shouldOverwrite {
+		if !s.shouldOverwrite {
 			zlog.Debug("writing object not allowing overwrite", zap.String("name", base))
 			return nil
 		}
@@ -110,38 +128,38 @@ func (m *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 		return fmt.Errorf("copy object to mock storage: %w", err)
 	}
 
-	m.files[base] = buffer.Bytes()
+	s.files[base] = buffer.Bytes()
 
-	zlog.Debug("wrote object", zap.String("name", base), zap.Int("content_length", len(m.files[base])))
+	zlog.Debug("wrote object", zap.String("name", base), zap.Int("content_length", len(s.files[base])))
 	return nil
 }
 
-func (m *MockStore) ObjectPath(base string) string {
+func (s *MockStore) ObjectPath(base string) string {
 	return base
 }
 
-func (m *MockStore) ObjectURL(base string) string {
+func (s *MockStore) ObjectURL(base string) string {
 	return base
 }
 
-func (m *MockStore) DeleteObject(ctx context.Context, base string) error {
-	if m.DeleteObjectFunc != nil {
-		return m.DeleteObjectFunc(ctx, base)
+func (s *MockStore) DeleteObject(ctx context.Context, base string) error {
+	if s.DeleteObjectFunc != nil {
+		return s.DeleteObjectFunc(ctx, base)
 	}
 
 	zlog.Debug("deleting object", zap.String("name", base))
-	delete(m.files, base)
+	delete(s.files, base)
 	return nil
 }
 
-func (m *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
-	if m.FileExistsFunc != nil {
-		return m.FileExistsFunc(ctx, base)
+func (s *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
+	if s.FileExistsFunc != nil {
+		return s.FileExistsFunc(ctx, base)
 	}
 
 	zlog.Debug("checking if file exists", zap.String("name", base))
 
-	content, exists := m.files[base]
+	content, exists := s.files[base]
 	if !exists {
 		return false, nil
 	}
@@ -153,30 +171,30 @@ func (m *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
 	return scnt != "err", nil
 }
 
-func (m *MockStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
-	if m.ListFilesFunc != nil {
-		return m.ListFilesFunc(ctx, prefix, ignoreSuffix, max)
+func (s *MockStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
+	if s.ListFilesFunc != nil {
+		return s.ListFilesFunc(ctx, prefix, ignoreSuffix, max)
 	}
 
-	return listFiles(ctx, m, prefix, ignoreSuffix, max)
+	return listFiles(ctx, s, prefix, ignoreSuffix, max)
 }
 
-func (m *MockStore) SetOverwrite(in bool) {
-	m.shouldOverwrite = in
+func (s *MockStore) SetOverwrite(in bool) {
+	s.shouldOverwrite = in
 	return
 }
 
-func (m *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
-	return commonWalkFrom(m, ctx, prefix, startingPoint, f)
+func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
-func (m *MockStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) error) error {
-	if m.WalkFunc != nil {
-		return m.WalkFunc(ctx, prefix, ignoreSuffix, f)
+func (s *MockStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) error) error {
+	if s.WalkFunc != nil {
+		return s.WalkFunc(ctx, prefix, ignoreSuffix, f)
 	}
 
 	zlog.Debug("walking files", zap.String("prefix", prefix))
-	sortedFiles := m.sortedFiles()
+	sortedFiles := s.sortedFiles()
 
 	for _, file := range sortedFiles {
 		zlog.Debug("walking file", zap.String("file", file), zap.Bool("has_prefix", strings.HasPrefix(file, prefix)))
@@ -195,11 +213,11 @@ func (m *MockStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fun
 	return nil
 }
 
-func (m *MockStore) sortedFiles() []string {
-	sortedFiles := make([]string, len(m.files))
+func (s *MockStore) sortedFiles() []string {
+	sortedFiles := make([]string, len(s.files))
 
 	i := 0
-	for file := range m.files {
+	for file := range s.files {
 		sortedFiles[i] = file
 		i++
 	}
@@ -208,18 +226,18 @@ func (m *MockStore) sortedFiles() []string {
 	return sortedFiles
 }
 
-func (m *MockStore) PushLocalFile(ctx context.Context, localFile string, toBaseName string) (err error) {
-	if m.PushLocalFileFunc != nil {
-		return m.PushLocalFileFunc(ctx, localFile, toBaseName)
+func (s *MockStore) PushLocalFile(ctx context.Context, localFile string, toBaseName string) (err error) {
+	if s.PushLocalFileFunc != nil {
+		return s.PushLocalFileFunc(ctx, localFile, toBaseName)
 	}
 
-	remove, err := pushLocalFile(ctx, m, localFile, toBaseName)
+	remove, err := pushLocalFile(ctx, s, localFile, toBaseName)
 	if err != nil {
 		return err
 	}
 	return remove()
 }
 
-func (m *MockStore) Overwrite() bool {
-	return m.shouldOverwrite
+func (s *MockStore) Overwrite() bool {
+	return s.shouldOverwrite
 }

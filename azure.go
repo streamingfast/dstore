@@ -56,6 +56,15 @@ func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrit
 	}, nil
 }
 
+func (s *AzureStore) SubStore(subFolder string) (Store, error) {
+	url, err := url.Parse(s.baseURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("azure store parsing base url: %w", err)
+	}
+	url.Path = path.Join(url.Path, subFolder)
+	return NewAzureStore(url, s.extension, s.compressionType, s.overwrite)
+}
+
 func (s *AzureStore) BaseURL() *url.URL {
 	return s.baseURL
 }

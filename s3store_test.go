@@ -3,6 +3,7 @@ package dstore
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,19 +21,19 @@ func TestNewS3Store(t *testing.T) {
 		expectedRegion   string
 		expectedErr      error
 	}{
-		{"s3://bucket?region=test", defaultEndpoint, "bucket", "", "test", nil},
-		{"s3://bucket/path1?region=test", defaultEndpoint, "bucket", "path1", "test", nil},
+		{url: "s3://bucket?region=test", expectedEndpoint: defaultEndpoint, expectedBucket: "bucket", expectedRegion: "test"},
+		{url: "s3://bucket/path1?region=test", expectedEndpoint: defaultEndpoint, expectedBucket: "bucket", expectedPath: "path1", expectedRegion: "test"},
 		{"s3://bucket/path1/path2?region=test", defaultEndpoint, "bucket", "path1/path2", "test", nil},
 
-		{"s3://test.com/bucket?region=test", "https://test.com", "bucket", "", "test", nil},
-		{"s3://test.com/bucket/path1/?region=test", "https://test.com", "bucket", "path1", "test", nil},
-		{"s3://test.com/bucket/path1/path2?region=test", "https://test.com", "bucket", "path1/path2", "test", nil},
-		{"s3://test.com/bucket/path1/path2?region=test&insecure=true", "http://test.com", "bucket", "path1/path2", "test", nil},
+		{url: "s3://test.com/bucket?region=test", expectedEndpoint: "https://test.com", expectedBucket: "bucket", expectedRegion: "test"},
+		{url: "s3://test.com/bucket/path1/?region=test", expectedEndpoint: "https://test.com", expectedBucket: "bucket", expectedPath: "path1", expectedRegion: "test"},
+		{url: "s3://test.com/bucket/path1/path2?region=test", expectedEndpoint: "https://test.com", expectedBucket: "bucket", expectedPath: "path1/path2", expectedRegion: "test"},
+		{url: "s3://test.com/bucket/path1/path2?region=test&insecure=true", expectedEndpoint: "http://test.com", expectedBucket: "bucket", expectedPath: "path1/path2", expectedRegion: "test"},
 
-		{"s3://localhost:9000/store-tests/dstore-s3store-tests-63acbe181e32c21e?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin", "http://localhost:9000", "store-tests", "dstore-s3store-tests-63acbe181e32c21e", "none", nil},
-		{"s3://localhost:9000/store-tests?region=none&insecure=true", "http://localhost:9000", "store-tests", "", "none", nil},
+		{url: "s3://localhost:9000/store-tests/dstore-s3store-tests-63acbe181e32c21e?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin", expectedEndpoint: "http://localhost:9000", expectedBucket: "store-tests", expectedPath: "dstore-s3store-tests-63acbe181e32c21e", expectedRegion: "none"},
+		{url: "s3://localhost:9000/store-tests?region=none&insecure=true", expectedEndpoint: "http://localhost:9000", expectedBucket: "store-tests", expectedRegion: "none"},
 
-		{"s3://bucket-with.dot/path1?region=test&infer_aws_endpoint=true", defaultEndpoint, "bucket-with.dot", "path1", "test", nil},
+		{url: "s3://bucket-with.dot/path1?region=test&infer_aws_endpoint=true", expectedEndpoint: defaultEndpoint, expectedBucket: "bucket-with.dot", expectedPath: "path1", expectedRegion: "test"},
 	}
 
 	for i, test := range tests {
@@ -51,6 +52,9 @@ func TestNewS3Store(t *testing.T) {
 			} else {
 				assert.Equal(t, test.expectedErr, err)
 			}
+			sub, err := store.SubStore("sub-folder")
+			require.NoError(t, err)
+			require.True(t, strings.HasSuffix(sub.BaseURL().Path, "sub-folder"))
 		})
 	}
 }

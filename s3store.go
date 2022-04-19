@@ -91,6 +91,15 @@ func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite b
 	return s, nil
 }
 
+func (s *S3Store) SubStore(subFolder string) (Store, error) {
+	url, err := url.Parse(s.baseURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("s3 store parsing base url: %w", err)
+	}
+	url.Path = path.Join(url.Path, subFolder)
+	return NewS3Store(url, s.extension, s.compressionType, s.overwrite)
+}
+
 func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket string, path string, err error) {
 	region := s3URL.Query().Get("region")
 	if region == "" {

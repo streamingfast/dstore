@@ -36,6 +36,7 @@ type Store interface {
 	// Used to retrieve original query parameters, allowing further
 	// configurability of the consumers of this store.
 	BaseURL() *url.URL
+	SubStore(subFolder string) (Store, error)
 }
 
 var StopIteration = errors.New("stop iteration")
