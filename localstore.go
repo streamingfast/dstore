@@ -51,11 +51,12 @@ func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrit
 }
 
 func (s *LocalStore) SubStore(subFolder string) (Store, error) {
-	url, err := url.Parse(s.baseURL.String())
+	basePath := s.baseURL.Path
+	newPath := path.Join(basePath, subFolder)
+	url, err := url.Parse(newPath)
 	if err != nil {
 		return nil, fmt.Errorf("local store parsing base url: %w", err)
 	}
-	url.Path = path.Join(url.Path, subFolder)
 	return NewLocalStore(url, s.extension, s.compressionType, s.overwrite)
 }
 

@@ -27,8 +27,17 @@ func TestNewLocalStore_OpenObject_notFound(t *testing.T) {
 
 	_, err = store.OpenObject(context.Background(), "foo.txt")
 	assert.Equal(t, ErrNotFound, err)
-}
+}x
 
+func TestNewLocalStore_SubStoreRelative(t *testing.T) {
+	store, err := NewLocalStore(&url.URL{Scheme: "", Path: "./storage/"}, "", "", false)
+	require.NoError(t, err)
+
+	sub, err := store.SubStore("sub-folder")
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(sub.BaseURL().Path, "sub-folder"))
+
+}
 func TestNewLocalStore_SubStore(t *testing.T) {
 	store, err := NewLocalStore(&url.URL{Scheme: "", Path: "/tmp/storage/"}, "", "", false)
 	require.NoError(t, err)
