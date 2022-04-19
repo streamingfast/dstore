@@ -27,7 +27,7 @@ func TestNewLocalStore_OpenObject_notFound(t *testing.T) {
 
 	_, err = store.OpenObject(context.Background(), "foo.txt")
 	assert.Equal(t, ErrNotFound, err)
-}x
+}
 
 func TestNewLocalStore_SubStoreRelative(t *testing.T) {
 	store, err := NewLocalStore(&url.URL{Scheme: "", Path: "./storage/"}, "", "", false)
