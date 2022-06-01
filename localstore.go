@@ -157,6 +157,10 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	path := s.ObjectPath(name)
 
+	if tracer.Enabled() {
+		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		if strings.ContainsAny(err.Error(), "no such file or directory") {
@@ -166,7 +170,13 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	}
 
 	reader := NewBufferedFileReadCloser(file)
-	return s.uncompressedReader(reader)
+	out, err = s.uncompressedReader(reader)
+	if tracer.Enabled() {
+		out = wrapReadCloser(out, func() {
+			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))
+		})
+	}
+	return
 }
 
 func (s *LocalStore) toBaseName(filename string) string {

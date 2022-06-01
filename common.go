@@ -110,6 +110,26 @@ func (c *commonStore) compressedCopy(f io.Reader, w io.Writer) error {
 	return nil
 }
 
+func wrapReadCloser(orig io.ReadCloser, f func()) io.ReadCloser {
+	return &wrappedReadCloser{
+		orig:      orig,
+		closeHook: f,
+	}
+}
+
+type wrappedReadCloser struct {
+	orig      io.ReadCloser
+	closeHook func()
+}
+
+func (wrc *wrappedReadCloser) Close() error {
+	wrc.closeHook()
+	return wrc.orig.Close()
+}
+func (wrc *wrappedReadCloser) Read(p []byte) (n int, err error) {
+	return wrc.orig.Read(p)
+}
+
 func (c *commonStore) uncompressedReader(reader io.ReadCloser) (out io.ReadCloser, err error) {
 	switch c.compressionType {
 	case "gzip":

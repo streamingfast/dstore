@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
@@ -104,6 +105,9 @@ func silencePreconditionError(err error) error {
 func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	path := s.ObjectPath(name)
 
+	if tracer.Enabled() {
+		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))
+	}
 	reader, err := s.client.Bucket(s.baseURL.Host).Object(path).NewReader(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
@@ -113,7 +117,13 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		return nil, err
 	}
 
-	return s.uncompressedReader(reader)
+	out, err = s.uncompressedReader(reader)
+	if tracer.Enabled() {
+		out = wrapReadCloser(out, func() {
+			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))
+		})
+	}
+	return
 }
 
 func (s *GSStore) DeleteObject(ctx context.Context, base string) error {

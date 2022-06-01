@@ -244,10 +244,13 @@ func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 	return true, nil
 }
 
-func (s *S3Store) OpenObject(ctx context.Context, name string) (io.ReadCloser, error) {
+func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	path := s.ObjectPath(name)
 
-	var err error
+	if tracer.Enabled() {
+		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))
+	}
+
 	for i := 0; i < s3ReadAttempts; i++ {
 		if i > 0 { // small wait on retry
 			zlog.Warn("got an error on s3 OpenObject, retrying",
@@ -279,9 +282,16 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (io.ReadCloser, e
 			if err = reader.Body.Close(); err != nil {
 				continue
 			}
-			return s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
+			out, err = s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
+		} else {
+			out, err = s.uncompressedReader(reader.Body)
 		}
-		return s.uncompressedReader(reader.Body)
+		if tracer.Enabled() {
+			out = wrapReadCloser(out, func() {
+				zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))
+			})
+		}
+		return out, err
 	}
 	return nil, fmt.Errorf("s3 open object (%d attempts, buffered_read: %v): %w", s3ReadAttempts, bufferedS3Read, err)
 }
