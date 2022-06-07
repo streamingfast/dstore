@@ -71,7 +71,7 @@ func Test_decodeAzureScheme(t *testing.T) {
 }
 
 func TestAzureSToreWriteObject(t *testing.T) {
-	t.Skip() // need azure access to test this, do it on your PC
+	t.Skip("needs azure access to test this")
 	os.Setenv("AZURE_STORAGE_KEY", "")
 
 	base, _ := url.Parse("az://dfusesandbox.demo/test")
@@ -93,7 +93,7 @@ func TestAzureSToreWriteObject(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	readFiles, err := s.ListFiles(context.Background(), "", "", 10)
+	readFiles, err := s.ListFiles(context.Background(), "", 10)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, expectedFiles, readFiles)
 
@@ -114,7 +114,7 @@ func TestAzureSToreWriteObject(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	readFiles, err = s.ListFiles(context.Background(), "", "", 10)
+	readFiles, err = s.ListFiles(context.Background(), "", 10)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{}, readFiles)
 }

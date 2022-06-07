@@ -32,7 +32,7 @@ func (c *commonStore) pathWithExt(base string) string {
 
 func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	var gatePassed bool
-	return store.Walk(ctx, prefix, "", func(filename string) error {
+	return store.Walk(ctx, prefix, func(filename string) error {
 		if gatePassed {
 			return f(filename)
 		}
@@ -63,9 +63,9 @@ func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName strin
 	}, nil
 }
 
-func listFiles(ctx context.Context, store Store, prefix, ignoreSuffix string, max int) (out []string, err error) {
+func listFiles(ctx context.Context, store Store, prefix string, max int) (out []string, err error) {
 	var count int
-	err = store.Walk(ctx, prefix, ignoreSuffix, func(filename string) error {
+	err = store.Walk(ctx, prefix, func(filename string) error {
 		count++
 		if count > max {
 			return StopIteration

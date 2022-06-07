@@ -64,15 +64,15 @@ func (s *LocalStore) BaseURL() *url.URL {
 	return s.baseURL
 }
 
-func (s *LocalStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
-	return listFiles(ctx, s, prefix, ignoreSuffix, max)
+func (s *LocalStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
+	return listFiles(ctx, s, prefix, max)
 }
 
 func (s *LocalStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
-func (s *LocalStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {
+func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	fullPath := s.basePath + "/"
 	if prefix != "" {
 		fullPath += prefix
@@ -89,11 +89,10 @@ func (s *LocalStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fu
 	}
 
 	err := filepath.Walk(walkPath, func(infoPath string, info os.FileInfo, err error) error {
-		if ignoreSuffix != "" && strings.HasSuffix(infoPath, ignoreSuffix) {
-			// Early exist to avoid races with half-written `.tmp`
+		if strings.HasSuffix(infoPath, ".tmp") {
+			// Early exits to avoid races with half-written `.tmp`
 			// files, that would error out with the `err != nil` check
-			// below.  Only for local ones, as Google Storage-based
-			// are atomic, they exist or they don't exist.
+			// below.  Only for local ones, as other stores are atomic.
 			return nil
 		}
 		if err != nil {

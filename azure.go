@@ -176,7 +176,7 @@ func (s *AzureStore) WalkFrom(ctx context.Context, prefix, startingPoint string,
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
-func (a *AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) (err error)) error {
+func (a *AzureStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 
 	p := strings.TrimLeft(a.baseURL.Path, "/") + "/"
 	if prefix != "" {
@@ -213,8 +213,8 @@ func (a *AzureStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f fu
 	return nil
 }
 
-func (a *AzureStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
-	return listFiles(ctx, a, prefix, ignoreSuffix, max)
+func (a *AzureStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
+	return listFiles(ctx, a, prefix, max)
 }
 
 func (a AzureStore) DeleteObject(ctx context.Context, base string) error {

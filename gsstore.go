@@ -153,11 +153,11 @@ func (s *GSStore) PushLocalFile(ctx context.Context, localFile, toBaseName strin
 	return remove()
 }
 
-func (s *GSStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
-	return listFiles(ctx, s, prefix, ignoreSuffix, max)
+func (s *GSStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
+	return listFiles(ctx, s, prefix, max)
 }
 
-func (s *GSStore) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
+func (s *GSStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	return s.WalkFrom(ctx, prefix, "", f)
 }
 

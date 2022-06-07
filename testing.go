@@ -22,8 +22,8 @@ type MockStore struct {
 	WriteObjectFunc   func(ctx context.Context, base string, f io.Reader) error
 	DeleteObjectFunc  func(ctx context.Context, base string) error
 	FileExistsFunc    func(ctx context.Context, base string) (bool, error)
-	ListFilesFunc     func(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error)
-	WalkFunc          func(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) error) error
+	ListFilesFunc     func(ctx context.Context, prefix string, max int) ([]string, error)
+	WalkFunc          func(ctx context.Context, prefix string, f func(filename string) error) error
 	PushLocalFileFunc func(ctx context.Context, localFile string, toBaseName string) (err error)
 }
 
@@ -171,12 +171,12 @@ func (s *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
 	return scnt != "err", nil
 }
 
-func (s *MockStore) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
+func (s *MockStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
 	if s.ListFilesFunc != nil {
-		return s.ListFilesFunc(ctx, prefix, ignoreSuffix, max)
+		return s.ListFilesFunc(ctx, prefix, max)
 	}
 
-	return listFiles(ctx, s, prefix, ignoreSuffix, max)
+	return listFiles(ctx, s, prefix, max)
 }
 
 func (s *MockStore) SetOverwrite(in bool) {
@@ -188,9 +188,9 @@ func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, 
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
-func (s *MockStore) Walk(ctx context.Context, prefix, ignoreSuffix string, f func(filename string) error) error {
+func (s *MockStore) Walk(ctx context.Context, prefix string, f func(filename string) error) error {
 	if s.WalkFunc != nil {
-		return s.WalkFunc(ctx, prefix, ignoreSuffix, f)
+		return s.WalkFunc(ctx, prefix, f)
 	}
 
 	zlog.Debug("walking files", zap.String("prefix", prefix))

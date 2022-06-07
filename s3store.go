@@ -300,7 +300,7 @@ func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
-func (s *S3Store) Walk(ctx context.Context, prefix, _ string, f func(filename string) (err error)) error {
+func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	targetPrefix := s.path
 	if targetPrefix != "" {
 		targetPrefix += "/"
@@ -387,6 +387,6 @@ func (s *S3Store) PushLocalFile(ctx context.Context, localFile, toBaseName strin
 	return remove()
 }
 
-func (s *S3Store) ListFiles(ctx context.Context, prefix, ignoreSuffix string, max int) ([]string, error) {
-	return listFiles(ctx, s, prefix, ignoreSuffix, max)
+func (s *S3Store) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
+	return listFiles(ctx, s, prefix, max)
 }
