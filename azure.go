@@ -65,6 +65,16 @@ func (s *AzureStore) SubStore(subFolder string) (Store, error) {
 	return NewAzureStore(url, s.extension, s.compressionType, s.overwrite)
 }
 
+func (s *AzureStore) CopyObject(ctx context.Context, src, dest string) error {
+	// TODO optimize this
+	reader, err := s.OpenObject(ctx, src)
+	if err != nil {
+		return err
+	}
+
+	return s.WriteObject(ctx, dest, reader)
+}
+
 func (s *AzureStore) BaseURL() *url.URL {
 	return s.baseURL
 }

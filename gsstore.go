@@ -67,6 +67,15 @@ func (s *GSStore) toBaseName(filename string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), strings.TrimLeft(s.baseURL.Path, "/")+"/")
 }
 
+func (s *GSStore) CopyObject(ctx context.Context, src, dest string) error {
+	srcPath := s.ObjectPath(src)
+	srcObj := s.client.Bucket(s.baseURL.Host).Object(srcPath)
+
+	destPath := s.ObjectPath(dest)
+	_, err := s.client.Bucket(s.baseURL.Host).Object(destPath).CopierFrom(srcObj).Run(ctx)
+	return err
+}
+
 func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := s.ObjectPath(base)
 

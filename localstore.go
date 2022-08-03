@@ -153,6 +153,15 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 	return nil
 }
 
+func (s *LocalStore) CopyObject(ctx context.Context, src, dest string) error {
+	reader, err := s.OpenObject(ctx, src)
+	if err != nil {
+		return err
+	}
+
+	return s.WriteObject(ctx, dest, reader)
+}
+
 func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	path := s.ObjectPath(name)
 

@@ -20,6 +20,7 @@ type MockStore struct {
 	shouldOverwrite   bool
 	OpenObjectFunc    func(ctx context.Context, name string) (out io.ReadCloser, err error)
 	WriteObjectFunc   func(ctx context.Context, base string, f io.Reader) error
+	CopyObjectFunc    func(ctx context.Context, src, dest string) error
 	DeleteObjectFunc  func(ctx context.Context, base string) error
 	FileExistsFunc    func(ctx context.Context, base string) (bool, error)
 	ListFilesFunc     func(ctx context.Context, prefix string, max int) ([]string, error)
@@ -49,6 +50,7 @@ func (s *MockStore) SubStore(subFolder string) (Store, error) {
 		shouldOverwrite:   s.shouldOverwrite,
 		OpenObjectFunc:    s.OpenObjectFunc,
 		WriteObjectFunc:   s.WriteObjectFunc,
+		CopyObjectFunc:    s.CopyObjectFunc,
 		DeleteObjectFunc:  s.DeleteObjectFunc,
 		FileExistsFunc:    s.FileExistsFunc,
 		ListFilesFunc:     s.ListFilesFunc,
@@ -102,6 +104,18 @@ func (s *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 	zlog.Debug("opened object", zap.String("name", name), zap.Int("content_length", len(content)))
 	return ioutil.NopCloser(bytes.NewReader(content)), nil
 
+}
+
+func (s *MockStore) CopyObject(ctx context.Context, src, dest string) error {
+	if s.CopyObjectFunc != nil {
+		return s.CopyObjectFunc(ctx, src, dest)
+	}
+	reader, err := s.OpenObject(ctx, src)
+	if err != nil {
+		return err
+	}
+
+	return s.WriteObject(ctx, dest, reader)
 }
 
 func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {

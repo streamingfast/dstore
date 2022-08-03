@@ -22,7 +22,7 @@ func TestWalk_IgnoreNotFound(t *testing.T, factory StoreFactory) {
 	store, cleanup := factory()
 	defer cleanup()
 
-	err := store.Walk(ctx, "bubblicious/0000", "", func(f string) error { return nil })
+	err := store.Walk(ctx, "bubblicious/0000", func(f string) error { return nil })
 	require.NoError(t, err)
 }
 
@@ -36,7 +36,7 @@ func TestWalk_FilePrefix(t *testing.T, factory StoreFactory) {
 	}
 
 	var seen []string
-	err := store.Walk(ctx, "0000", "", func(f string) error {
+	err := store.Walk(ctx, "0000", func(f string) error {
 		seen = append(seen, f)
 		exists, err := store.FileExists(ctx, f)
 		assert.NoError(t, err)
@@ -81,7 +81,7 @@ func TestWalk_PathPrefix(t *testing.T, factory StoreFactory) {
 	}
 
 	var seen []string
-	err := store.Walk(ctx, "0000", "", func(f string) error {
+	err := store.Walk(ctx, "0000", func(f string) error {
 		seen = append(seen, f)
 		exists, err := store.FileExists(ctx, f)
 		assert.NoError(t, err)
@@ -103,20 +103,20 @@ func TestListFiles(t *testing.T, factory StoreFactory) {
 	}{
 		{
 			name:           "empty",
-			withQuery:      listFilesQuery{prefix: "", ignoreSuffix: "", max: math.MaxInt64},
+			withQuery:      listFilesQuery{prefix: "", max: math.MaxInt64},
 			whenFiles:      []testFile{},
 			expectingNames: nil, expectedErr: nil,
 		},
 		{
 			name:           "multiple",
-			withQuery:      listFilesQuery{prefix: "", ignoreSuffix: "", max: math.MaxInt64},
+			withQuery:      listFilesQuery{prefix: "", max: math.MaxInt64},
 			whenFiles:      []testFile{{"1", "c1"}, {"2", "c2"}, {"3", "c3"}},
 			expectingNames: []string{"1", "2", "3"}, expectedErr: nil,
 		},
 
 		{
 			name:           "multiple with sub paths",
-			withQuery:      listFilesQuery{prefix: "", ignoreSuffix: "", max: math.MaxInt64},
+			withQuery:      listFilesQuery{prefix: "", max: math.MaxInt64},
 			whenFiles:      []testFile{{"a/1", "c1"}, {"b/2", "c2"}, {"b/3", "c3"}},
 			expectingNames: []string{"a/1", "b/2", "b/3"}, expectedErr: nil,
 		},
@@ -130,7 +130,7 @@ func TestListFiles(t *testing.T, factory StoreFactory) {
 				addFileToStore(t, store, file.id, file.content)
 			}
 
-			filenames, err := store.ListFiles(context.Background(), test.withQuery.prefix, test.withQuery.ignoreSuffix, test.withQuery.max)
+			filenames, err := store.ListFiles(context.Background(), test.withQuery.prefix, test.withQuery.max)
 			if test.expectedErr != nil {
 				require.Equal(t, test.expectedErr, err)
 			} else {

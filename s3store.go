@@ -226,6 +226,15 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	return nil
 }
 
+func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
+	// TODO optimize this
+	reader, err := s.OpenObject(ctx, src)
+	if err != nil {
+		return err
+	}
+
+	return s.WriteObject(ctx, dest, reader)
+}
 func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 	path := s.ObjectPath(base)
 

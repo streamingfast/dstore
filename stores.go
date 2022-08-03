@@ -23,6 +23,7 @@ type Store interface {
 	WriteObject(ctx context.Context, base string, f io.Reader) (err error)
 	PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error)
 
+	CopyObject(ctx context.Context, src, dest string) error
 	Overwrite() bool
 	SetOverwrite(enabled bool)
 
