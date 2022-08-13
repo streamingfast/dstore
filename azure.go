@@ -71,6 +71,7 @@ func (s *AzureStore) CopyObject(ctx context.Context, src, dest string) error {
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
 
 	return s.WriteObject(ctx, dest, reader)
 }
