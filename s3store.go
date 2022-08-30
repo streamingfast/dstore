@@ -369,6 +369,11 @@ func (s *S3Store) DeleteObject(ctx context.Context, base string) error {
 		Bucket: aws.String(s.bucket),
 		Key:    &path,
 	})
+	if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() == s3.ErrCodeNoSuchKey {
+			return ErrNotFound
+		}
+	}
 	return err
 }
 

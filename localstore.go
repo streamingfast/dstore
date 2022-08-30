@@ -205,7 +205,11 @@ func (s *LocalStore) ObjectURL(name string) string {
 
 func (s *LocalStore) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
-	return os.Remove(path)
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return ErrNotFound
+	}
+	return err
 }
 
 func (s *LocalStore) FileExists(ctx context.Context, base string) (bool, error) {

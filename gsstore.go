@@ -2,6 +2,7 @@ package dstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,7 +138,11 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 
 func (s *GSStore) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
-	return s.client.Bucket(s.baseURL.Host).Object(path).Delete(ctx)
+	err := s.client.Bucket(s.baseURL.Host).Object(path).Delete(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return ErrNotFound
+	}
+	return err
 }
 
 func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
