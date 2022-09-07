@@ -307,10 +307,6 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 }
 
 func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
-	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
-}
-
-func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	targetPrefix := s.path
 	if targetPrefix != "" {
 		targetPrefix += "/"
@@ -330,6 +326,11 @@ func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename strin
 		Bucket: aws.String(s.bucket),
 		Prefix: &targetPrefix,
 	}
+	// to match 'helloworld.html' by using startAfter, we use 'helloworld.htm' (and we filter again in the walk function  to filter out 'helloworld.htm0')
+	if len(startingPoint) > 1 {
+		rightBeforeStartingPoint := startingPoint[0 : len(startingPoint)-1]
+		q.StartAfter = &rightBeforeStartingPoint
+	}
 
 	var innerErr error
 	err := s.service.ListObjectsV2PagesWithContext(ctx, q, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
@@ -338,6 +339,11 @@ func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename strin
 			if filename == "" {
 				zlog.Warn("got an empty filename from s3 store, ignoring it", zap.String("key", *el.Key))
 				continue
+			}
+			if startingPoint != "" {
+				if filename < startingPoint {
+					continue
+				}
 			}
 			if err := f(filename); err != nil {
 				if err == StopIteration {
@@ -357,6 +363,10 @@ func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename strin
 	}
 
 	return nil
+}
+
+func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
+	return s.WalkFrom(ctx, prefix, "", f)
 }
 
 func (s *S3Store) toBaseName(filename string) string {
