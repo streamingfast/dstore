@@ -97,7 +97,15 @@ func (s *S3Store) SubStore(subFolder string) (Store, error) {
 		return nil, fmt.Errorf("s3 store parsing base url: %w", err)
 	}
 	url.Path = path.Join(url.Path, subFolder)
-	return NewS3Store(url, s.extension, s.compressionType, s.overwrite)
+	newPath := path.Join(s.path, subFolder)
+	return &S3Store{
+		baseURL:     url,
+		commonStore: s.commonStore,
+		service:     s.service,
+		uploader:    s.uploader,
+		bucket:      s.bucket,
+		path:        newPath,
+	}, nil
 }
 
 func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket string, path string, err error) {

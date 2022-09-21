@@ -49,7 +49,12 @@ func (s *GSStore) SubStore(subFolder string) (Store, error) {
 		return nil, fmt.Errorf("gs store parsing base url: %w", err)
 	}
 	url.Path = path.Join(url.Path, subFolder)
-	return NewGSStore(url, s.extension, s.compressionType, s.overwrite)
+
+	return &GSStore{
+		baseURL: url,
+		client: s.client,
+		commonStore: s.commonStore,
+	}, nil
 }
 
 func (s *GSStore) BaseURL() *url.URL {

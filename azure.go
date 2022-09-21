@@ -62,7 +62,12 @@ func (s *AzureStore) SubStore(subFolder string) (Store, error) {
 		return nil, fmt.Errorf("azure store parsing base url: %w", err)
 	}
 	url.Path = path.Join(url.Path, subFolder)
-	return NewAzureStore(url, s.extension, s.compressionType, s.overwrite)
+
+	return &AzureStore{
+		baseURL:      url,
+		containerURL: s.containerURL,
+		commonStore:  s.commonStore,
+	}, nil
 }
 
 func (s *AzureStore) CopyObject(ctx context.Context, src, dest string) error {
