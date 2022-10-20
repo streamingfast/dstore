@@ -70,7 +70,7 @@ func Test_decodeAzureScheme(t *testing.T) {
 
 }
 
-func TestAzureSToreWriteObject(t *testing.T) {
+func TestAzureStoreWriteObject(t *testing.T) {
 	t.Skip("needs azure access to test this")
 	os.Setenv("AZURE_STORAGE_KEY", "")
 

@@ -123,13 +123,16 @@ func AllowOverwrite() Option {
 	})
 }
 
-// NewStoreFromURL is similar from `NewStore` but infer the store URL path from the URL directly
-// extracting the filename along the way. The store's path is always the directory containing the file
-// itself.
+// Deprecated: Use NewStoreFromFileURL
+var NewStoreFromURL = NewStoreFromFileURL
+
+// NewStoreFromFileURL works against a full file URL to derive the store from it as well as
+// the filename it points to. Use this method **only and only if** the input points to a file directly,
+// if your input is to build a store, use NewStore instead.
 //
 // This is a shortcut helper function that make it simpler to get store from a single file
 // url.
-func NewStoreFromURL(fileURL string, opts ...Option) (store Store, filename string, err error) {
+func NewStoreFromFileURL(fileURL string, opts ...Option) (store Store, filename string, err error) {
 	var storeURL string
 	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
 		sanitizedURL := filepath.Clean(fileURL)
@@ -166,7 +169,7 @@ func NewStoreFromURL(fileURL string, opts ...Option) (store Store, filename stri
 // This is a shortcut helper function that make it simpler to get store from a single file
 // url.
 func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.ReadCloser, store Store, filename string, err error) {
-	store, filename, err = NewStoreFromURL(fileURL, opts...)
+	store, filename, err = NewStoreFromFileURL(fileURL, opts...)
 	if err != nil {
 		err = fmt.Errorf("new store: %w", err)
 		return
@@ -174,6 +177,22 @@ func OpenObject(ctx context.Context, fileURL string, opts ...Option) (out io.Rea
 
 	out, err = store.OpenObject(ctx, filename)
 	return
+}
+
+// ReadObject directly reads the giving file URL by parsing the file url, extracting the
+// path and the filename from it, creating the store interface, opening the object directly
+// and returning all this.
+//
+// This is a shortcut helper function that make it simpler to get store from a single file
+// url.
+func ReadObject(ctx context.Context, fileURL string, opts ...Option) ([]byte, error) {
+	reader, _, _, err := OpenObject(ctx, fileURL, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("open object: %w", err)
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
 }
 
 //
