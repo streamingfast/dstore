@@ -25,7 +25,7 @@ type LocalStore struct {
 
 func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*LocalStore, error) {
 	basePath := filepath.Clean(baseURL.Path)
-	zlog.Info("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
+	zlog.Debug("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
 
 	myBaseURL := *baseURL
 	myBaseURL.Scheme = "file"
