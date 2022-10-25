@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -42,7 +43,10 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 func (s *MockStore) SubStore(subFolder string) (Store, error) {
 	newFiles := map[string][]byte{}
 	for k, v := range s.files {
-		newFiles[subFolder+"/"+k] = v
+		prefix := filepath.Join(subFolder, "") + string(filepath.Separator)
+		if strings.HasPrefix(k, prefix) {
+			newFiles[strings.TrimPrefix(k, prefix)] = v
+		}
 	}
 
 	return &MockStore{
