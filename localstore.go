@@ -139,7 +139,7 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 		return fmt.Errorf("unable to create file %q: %w", tempPath, err)
 	}
 
-	if err := s.compressedCopy(reader, file); err != nil {
+	if err := s.compressedCopy(file, reader); err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
@@ -225,6 +225,23 @@ func (s *LocalStore) FileExists(ctx context.Context, base string) (bool, error) 
 	}
 
 	return false, err
+}
+
+func (s *LocalStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
+	path := s.ObjectPath(base)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	return &ObjectAttributes{
+		LastModified: info.ModTime(),
+		Size:         info.Size(),
+	}, nil
 }
 
 func (s *LocalStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {

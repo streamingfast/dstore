@@ -17,16 +17,17 @@ import (
 )
 
 type MockStore struct {
-	files             map[string][]byte
-	shouldOverwrite   bool
-	OpenObjectFunc    func(ctx context.Context, name string) (out io.ReadCloser, err error)
-	WriteObjectFunc   func(ctx context.Context, base string, f io.Reader) error
-	CopyObjectFunc    func(ctx context.Context, src, dest string) error
-	DeleteObjectFunc  func(ctx context.Context, base string) error
-	FileExistsFunc    func(ctx context.Context, base string) (bool, error)
-	ListFilesFunc     func(ctx context.Context, prefix string, max int) ([]string, error)
-	WalkFunc          func(ctx context.Context, prefix string, f func(filename string) error) error
-	PushLocalFileFunc func(ctx context.Context, localFile string, toBaseName string) (err error)
+	files                map[string][]byte
+	shouldOverwrite      bool
+	OpenObjectFunc       func(ctx context.Context, name string) (out io.ReadCloser, err error)
+	WriteObjectFunc      func(ctx context.Context, base string, f io.Reader) error
+	CopyObjectFunc       func(ctx context.Context, src, dest string) error
+	DeleteObjectFunc     func(ctx context.Context, base string) error
+	FileExistsFunc       func(ctx context.Context, base string) (bool, error)
+	ObjectAttributesFunc func(ctx context.Context, base string) (*ObjectAttributes, error)
+	ListFilesFunc        func(ctx context.Context, prefix string, max int) ([]string, error)
+	WalkFunc             func(ctx context.Context, prefix string, f func(filename string) error) error
+	PushLocalFileFunc    func(ctx context.Context, localFile string, toBaseName string) (err error)
 }
 
 func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockStore {
@@ -188,6 +189,14 @@ func (s *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
 		return false, fmt.Errorf("%q errored", base)
 	}
 	return scnt != "err", nil
+}
+
+func (s *MockStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
+	if s.ObjectAttributesFunc != nil {
+		return s.ObjectAttributesFunc(ctx, base)
+	}
+
+	return nil, nil
 }
 
 func (s *MockStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {

@@ -51,8 +51,8 @@ func (s *GSStore) SubStore(subFolder string) (Store, error) {
 	url.Path = path.Join(url.Path, subFolder)
 
 	return &GSStore{
-		baseURL: url,
-		client: s.client,
+		baseURL:     url,
+		client:      s.client,
 		commonStore: s.commonStore,
 	}, nil
 }
@@ -94,7 +94,7 @@ func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	w.ContentType = "application/octet-stream"
 	w.CacheControl = "public, max-age=86400"
 
-	if err := s.compressedCopy(f, w); err != nil {
+	if err := s.compressedCopy(w, f); err != nil {
 		return err
 	}
 
@@ -162,6 +162,24 @@ func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func (s *GSStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
+	path := s.ObjectPath(base)
+
+	attrs, err := s.client.Bucket(s.baseURL.Host).Object(path).Attrs(ctx)
+	if err != nil {
+		if err == storage.ErrObjectNotExist {
+			return nil, ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	return &ObjectAttributes{
+		LastModified: attrs.Updated,
+		Size:         attrs.Size,
+	}, nil
 }
 
 func (s *GSStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {

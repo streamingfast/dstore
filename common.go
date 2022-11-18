@@ -67,7 +67,7 @@ func listFiles(ctx context.Context, store Store, prefix string, max int) (out []
 	var count int
 	err = store.Walk(ctx, prefix, func(filename string) error {
 		count++
-		if count > max {
+		if max >= 0 && count > max {
 			return StopIteration
 		}
 
@@ -81,7 +81,7 @@ func listFiles(ctx context.Context, store Store, prefix string, max int) (out []
 	return
 }
 
-func (c *commonStore) compressedCopy(f io.Reader, w io.Writer) error {
+func (c *commonStore) compressedCopy(w io.Writer, f io.Reader) error {
 	switch c.compressionType {
 	case "gzip":
 		gw := gzip.NewWriter(w)

@@ -113,6 +113,21 @@ func (a *AzureStore) FileExists(ctx context.Context, base string) (bool, error) 
 	return true, nil
 }
 
+func (a *AzureStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
+	path := a.ObjectPath(base)
+
+	blobURL := a.containerURL.NewBlockBlobURL(path)
+	props, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ObjectAttributes{
+		LastModified: props.LastModified(),
+		Size:         props.ContentLength(),
+	}, nil
+}
+
 func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := a.ObjectPath(base)
 
@@ -133,7 +148,7 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 	go func() {
 		defer pipeWrite.Close()
 
-		err := a.compressedCopy(f, pipeWrite)
+		err := a.compressedCopy(pipeWrite, f)
 		if err != nil {
 			cancel()
 		}

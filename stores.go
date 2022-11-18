@@ -17,8 +17,10 @@ var ErrNotFound = errors.New("not found")
 type Store interface {
 	OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error)
 	FileExists(ctx context.Context, base string) (bool, error)
+
 	ObjectPath(base string) string
 	ObjectURL(base string) string
+	ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error)
 
 	WriteObject(ctx context.Context, base string, f io.Reader) (err error)
 	PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error)

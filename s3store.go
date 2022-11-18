@@ -203,7 +203,7 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
-		err := s.compressedCopy(f, pipeWrite)
+		err := s.compressedCopy(pipeWrite, f)
 		writeDone <- err
 		pipeWrite.Close() // required to allow the uploader to complete
 
@@ -260,6 +260,23 @@ func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
+	path := s.ObjectPath(base)
+
+	output, err := s.service.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    &path,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ObjectAttributes{
+		LastModified: *output.LastModified,
+		Size:         *output.ContentLength,
+	}, nil
 }
 
 func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
