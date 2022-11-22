@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -24,6 +26,7 @@ type LocalStore struct {
 }
 
 func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*LocalStore, error) {
+	rand.Seed(time.Now().UnixNano())
 	basePath := filepath.Clean(baseURL.Path)
 	zlog.Debug("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
 
@@ -127,7 +130,7 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Reader) (err error) {
 	destPath := s.ObjectPath(base)
 
-	tempPath := destPath + ".tmp"
+	tempPath := destPath + "." + randomString(8) + ".tmp"
 
 	targetDir := filepath.Dir(tempPath)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
@@ -250,4 +253,14 @@ func (s *LocalStore) PushLocalFile(ctx context.Context, localFile, toBaseName st
 		return err
 	}
 	return remove()
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randomString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }
