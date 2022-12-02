@@ -27,14 +27,14 @@ type MockStore struct {
 	WalkFunc             func(ctx context.Context, prefix string, f func(filename string) error) error
 	PushLocalFileFunc    func(ctx context.Context, localFile string, toBaseName string) (err error)
 
-	files           map[string][]byte
+	Files           map[string][]byte
 	shouldOverwrite bool
 
 	meter Meter
 }
 
 func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockStore {
-	store := &MockStore{files: make(map[string][]byte)}
+	store := &MockStore{Files: make(map[string][]byte)}
 	if writeFunc != nil {
 		store.WriteObjectFunc = func(ctx context.Context, base string, f io.Reader) error {
 			return writeFunc(base, f)
@@ -46,7 +46,7 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 
 func (s *MockStore) SubStore(subFolder string) (Store, error) {
 	newFiles := map[string][]byte{}
-	for k, v := range s.files {
+	for k, v := range s.Files {
 		prefix := filepath.Join(subFolder, "") + string(filepath.Separator)
 		if strings.HasPrefix(k, prefix) {
 			newFiles[strings.TrimPrefix(k, prefix)] = v
@@ -54,7 +54,7 @@ func (s *MockStore) SubStore(subFolder string) (Store, error) {
 	}
 
 	return &MockStore{
-		files:             newFiles,
+		Files:             newFiles,
 		meter:             s.meter,
 		shouldOverwrite:   s.shouldOverwrite,
 		OpenObjectFunc:    s.OpenObjectFunc,
@@ -74,7 +74,7 @@ func (s *MockStore) BaseURL() *url.URL {
 
 // WriteFiles dumps currently know file
 func (s *MockStore) WriteFiles(toDirectory string) error {
-	for name, content := range s.files {
+	for name, content := range s.Files {
 		if err := ioutil.WriteFile(path.Join(toDirectory, name), content, os.ModePerm); err != nil {
 			return fmt.Errorf("writing file %q: %w", name, err)
 		}
@@ -89,7 +89,7 @@ func (s *MockStore) SetFile(name string, content []byte) {
 	isError := string(content) == "err"
 	zlog.Debug("adding file", zap.String("name", name), zap.Int("content_length", len(content)), zap.Bool("is_error", isError))
 
-	s.files[name] = content
+	s.Files[name] = content
 }
 
 func (s *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
@@ -99,7 +99,7 @@ func (s *MockStore) OpenObject(ctx context.Context, name string) (out io.ReadClo
 
 	zlog.Debug("opening object", zap.String("name", name))
 
-	content, exists := s.files[name]
+	content, exists := s.Files[name]
 	if !exists {
 		zlog.Debug("opening object not found", zap.String("name", name))
 		return nil, io.EOF
@@ -134,7 +134,7 @@ func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 	}
 
 	zlog.Debug("writing object", zap.String("name", base))
-	content, exists := s.files[base]
+	content, exists := s.Files[base]
 	if !exists {
 		zlog.Debug("writing object not found, creating new one", zap.String("name", base))
 	} else {
@@ -152,9 +152,9 @@ func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 		return fmt.Errorf("copy object to mock storage: %w", err)
 	}
 
-	s.files[base] = buffer.Bytes()
+	s.Files[base] = buffer.Bytes()
 
-	zlog.Debug("wrote object", zap.String("name", base), zap.Int("content_length", len(s.files[base])))
+	zlog.Debug("wrote object", zap.String("name", base), zap.Int("content_length", len(s.Files[base])))
 	return nil
 }
 
@@ -172,7 +172,7 @@ func (s *MockStore) DeleteObject(ctx context.Context, base string) error {
 	}
 
 	zlog.Debug("deleting object", zap.String("name", base))
-	delete(s.files, base)
+	delete(s.Files, base)
 	return nil
 }
 
@@ -183,7 +183,7 @@ func (s *MockStore) FileExists(ctx context.Context, base string) (bool, error) {
 
 	zlog.Debug("checking if file exists", zap.String("name", base))
 
-	content, exists := s.files[base]
+	content, exists := s.Files[base]
 	if !exists {
 		return false, nil
 	}
@@ -246,10 +246,10 @@ func (s *MockStore) Walk(ctx context.Context, prefix string, f func(filename str
 }
 
 func (s *MockStore) sortedFiles() []string {
-	sortedFiles := make([]string, len(s.files))
+	sortedFiles := make([]string, len(s.Files))
 
 	i := 0
-	for file := range s.files {
+	for file := range s.Files {
 		sortedFiles[i] = file
 		i++
 	}
