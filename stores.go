@@ -40,6 +40,8 @@ type Store interface {
 	// configurability of the consumers of this store.
 	BaseURL() *url.URL
 	SubStore(subFolder string) (Store, error)
+
+	SetMeter(meter Meter)
 }
 
 var StopIteration = errors.New("stop iteration")

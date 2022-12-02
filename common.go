@@ -18,6 +18,12 @@ type commonStore struct {
 	extension       string
 	compressionType string
 	overwrite       bool
+
+	meter Meter
+}
+
+func (c *commonStore) SetMeter(m Meter) {
+	c.meter = m
 }
 
 func (c *commonStore) Overwrite() bool      { return c.overwrite }
@@ -82,6 +88,10 @@ func listFiles(ctx context.Context, store Store, prefix string, max int) (out []
 }
 
 func (c *commonStore) compressedCopy(w io.Writer, f io.Reader) error {
+	if c.meter != nil {
+		w = &meteredWriter{w: w, m: c.meter}
+	}
+
 	switch c.compressionType {
 	case "gzip":
 		gw := gzip.NewWriter(w)
@@ -110,6 +120,33 @@ func (c *commonStore) compressedCopy(w io.Writer, f io.Reader) error {
 	return nil
 }
 
+func (c *commonStore) uncompressedReader(reader io.ReadCloser) (out io.ReadCloser, err error) {
+	if c.meter != nil {
+		reader = &meteredReadCloser{rc: reader, m: c.meter}
+	}
+
+	switch c.compressionType {
+	case "gzip":
+		gzipReader, err := NewGZipReadCloser(reader)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create gzip reader: %w", err)
+		}
+
+		out = gzipReader
+	case "zstd":
+		zstdReader, err := zstd.NewReader(reader)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
+		}
+
+		out = zstdReader.IOReadCloser()
+	default:
+		out = reader
+	}
+
+	return out, nil
+}
+
 func wrapReadCloser(orig io.ReadCloser, f func()) io.ReadCloser {
 	return &wrappedReadCloser{
 		orig:      orig,
@@ -126,27 +163,7 @@ func (wrc *wrappedReadCloser) Close() error {
 	wrc.closeHook()
 	return wrc.orig.Close()
 }
+
 func (wrc *wrappedReadCloser) Read(p []byte) (n int, err error) {
 	return wrc.orig.Read(p)
-}
-
-func (c *commonStore) uncompressedReader(reader io.ReadCloser) (out io.ReadCloser, err error) {
-	switch c.compressionType {
-	case "gzip":
-		gzipReader, err := NewGZipReadCloser(reader)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create gzip reader: %w", err)
-		}
-
-		return gzipReader, nil
-	case "zstd":
-		zstdReader, err := zstd.NewReader(reader)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
-		}
-
-		return zstdReader.IOReadCloser(), nil
-	default:
-		return reader, nil
-	}
 }
