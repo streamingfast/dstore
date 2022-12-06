@@ -60,7 +60,14 @@ func (s *LocalStore) SubStore(subFolder string) (Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("local store parsing base url: %w", err)
 	}
-	return NewLocalStore(url, s.extension, s.compressionType, s.overwrite)
+
+	ls, err := NewLocalStore(url, s.extension, s.compressionType, s.overwrite)
+	if err != nil {
+		return nil, err
+	}
+
+	ls.meter = s.meter
+	return ls, nil
 }
 
 func (s *LocalStore) BaseURL() *url.URL {
