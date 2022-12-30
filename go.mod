@@ -5,7 +5,7 @@ go 1.18
 require (
 	cloud.google.com/go/storage v1.22.1
 	github.com/Azure/azure-storage-blob-go v0.14.0
-	github.com/aws/aws-sdk-go v1.25.43
+	github.com/aws/aws-sdk-go v1.33.0
 	github.com/klauspost/compress v1.10.2
 	github.com/streamingfast/logging v0.0.0-20220304214715-bc750a74b424
 	github.com/stretchr/testify v1.7.0
@@ -26,7 +26,7 @@ require (
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.3.0 // indirect
 	github.com/googleapis/go-type-adapters v1.0.0 // indirect
-	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
+	github.com/jmespath/go-jmespath v0.3.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
