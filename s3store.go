@@ -288,7 +288,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 
 	for i := 0; i < s3ReadAttempts; i++ {
 		if i > 0 { // small wait on retry
-			zlog.Warn("got an error on s3 OpenObject, retrying",
+			zlog.Debug("got an error on s3 OpenObject, retrying",
 				zap.Error(err),
 				zap.Int("attempt", i),
 				zap.Int("max_attempts", s3ReadAttempts),
@@ -362,7 +362,7 @@ func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 		for _, el := range page.Contents {
 			filename := s.toBaseName(*el.Key)
 			if filename == "" {
-				zlog.Warn("got an empty filename from s3 store, ignoring it", zap.String("key", *el.Key))
+				zlog.Debug("got an empty filename from s3 store, ignoring it", zap.String("key", *el.Key))
 				continue
 			}
 			if startingPoint != "" {
@@ -418,11 +418,11 @@ func (s *S3Store) PushLocalFile(ctx context.Context, localFile, toBaseName strin
 		time.Sleep(retryS3PushLocalFilesDelay)
 		exists, err := s.FileExists(ctx, toBaseName)
 		if err != nil {
-			zlog.Warn("just pushed file to dstore, but cannot check if it is still there after 500 milliseconds and retryS3PushLocalFiles is set", zap.Error(err))
+			zlog.Debug("just pushed file to dstore, but cannot check if it is still there after 500 milliseconds and retryS3PushLocalFiles is set", zap.Error(err))
 			return err
 		}
 		if !exists {
-			zlog.Warn("just pushed file to dstore, but it disappeared. Pushing again because retryS3PushLocalFiles is set", zap.String("dest basename", toBaseName))
+			zlog.Debug("just pushed file to dstore, but it disappeared. Pushing again because retryS3PushLocalFiles is set", zap.String("dest basename", toBaseName))
 			rem, err := pushLocalFile(ctx, s, localFile, toBaseName)
 			if err != nil {
 				return err
