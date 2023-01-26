@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -186,7 +187,7 @@ func (s *S3Store) ObjectURL(name string) string {
 }
 
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
-	path := s.ObjectPath(base)
+	objPath := s.ObjectPath(base)
 
 	exists, err := s.FileExists(ctx, base)
 	if err != nil {
@@ -198,14 +199,19 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 		return nil
 	}
 
-	pipeRead, pipeWrite := io.Pipe()
+	pr, pw := io.Pipe()
 	writeDone := make(chan error, 1)
 	ctx, cancel := context.WithCancel(ctx)
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
 	go func() {
-		err := s.compressedCopy(pipeWrite, f)
+		defer wg.Done()
+
+		err := s.compressedCopy(pw, f)
 		writeDone <- err
-		pipeWrite.Close() // required to allow the uploader to complete
+		pw.Close() // required to allow the uploader to complete
 
 		if err != nil {
 			cancel()
@@ -214,8 +220,8 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 
 	_, err = s.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
-		Key:    &path,
-		Body:   pipeRead,
+		Key:    &objPath,
+		Body:   pr,
 	})
 	if err != nil {
 		select {
@@ -226,10 +232,12 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 		default:
 			// error was generated in the Upload (s3 or context timeout), compressedCopy is not finished,
 			// we make it fail. double closing is safe here
-			pipeWrite.Close()
+			pw.Close()
 		}
 		return fmt.Errorf("uploading to S3 through manager: %w", err)
 	}
+
+	wg.Wait()
 
 	return nil
 }
