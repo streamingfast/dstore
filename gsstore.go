@@ -21,8 +21,9 @@ import (
 // Google Storage Store
 
 type GSStore struct {
-	baseURL *url.URL
-	client  *storage.Client
+	baseURL     *url.URL
+	client      *storage.Client
+	userProject string
 	*commonStore
 }
 
@@ -32,6 +33,7 @@ func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite b
 	if err != nil {
 		return nil, err
 	}
+	userProject := baseURL.Query().Get("project")
 
 	return &GSStore{
 		baseURL: baseURL,
@@ -41,6 +43,7 @@ func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite b
 			extension:       extension,
 			overwrite:       overwrite,
 		},
+		userProject: userProject,
 	}, nil
 }
 func (s *GSStore) SubStore(subFolder string) (Store, error) {
@@ -54,7 +57,15 @@ func (s *GSStore) SubStore(subFolder string) (Store, error) {
 		baseURL:     url,
 		client:      s.client,
 		commonStore: s.commonStore,
+		userProject: s.userProject,
 	}, nil
+}
+
+func (s *GSStore) bucket() *storage.BucketHandle {
+	if s.userProject != "" {
+		return s.client.Bucket(s.baseURL.Host).UserProject(s.userProject)
+	}
+	return s.client.Bucket(s.baseURL.Host)
 }
 
 func (s *GSStore) BaseURL() *url.URL {
@@ -75,17 +86,17 @@ func (s *GSStore) toBaseName(filename string) string {
 
 func (s *GSStore) CopyObject(ctx context.Context, src, dest string) error {
 	srcPath := s.ObjectPath(src)
-	srcObj := s.client.Bucket(s.baseURL.Host).Object(srcPath)
+	srcObj := s.bucket().Object(srcPath)
 
 	destPath := s.ObjectPath(dest)
-	_, err := s.client.Bucket(s.baseURL.Host).Object(destPath).CopierFrom(srcObj).Run(ctx)
+	_, err := s.bucket().Object(destPath).CopierFrom(srcObj).Run(ctx)
 	return err
 }
 
 func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	path := s.ObjectPath(base)
 
-	object := s.client.Bucket(s.baseURL.Host).Object(path)
+	object := s.bucket().Object(path)
 
 	if !s.overwrite {
 		object = object.If(storage.Conditions{DoesNotExist: true})
@@ -123,7 +134,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))
 	}
-	reader, err := s.client.Bucket(s.baseURL.Host).Object(path).NewReader(ctx)
+	reader, err := s.bucket().Object(path).NewReader(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
 			return nil, ErrNotFound
@@ -143,7 +154,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 
 func (s *GSStore) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
-	err := s.client.Bucket(s.baseURL.Host).Object(path).Delete(ctx)
+	err := s.bucket().Object(path).Delete(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return ErrNotFound
 	}
@@ -153,7 +164,7 @@ func (s *GSStore) DeleteObject(ctx context.Context, base string) error {
 func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
 	path := s.ObjectPath(base)
 
-	_, err := s.client.Bucket(s.baseURL.Host).Object(path).Attrs(ctx)
+	_, err := s.bucket().Object(path).Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
 			return false, nil
@@ -167,7 +178,7 @@ func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
 func (s *GSStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
 	path := s.ObjectPath(base)
 
-	attrs, err := s.client.Bucket(s.baseURL.Host).Object(path).Attrs(ctx)
+	attrs, err := s.bucket().Object(path).Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
 			return nil, ErrNotFound
@@ -212,7 +223,7 @@ func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 	if startingPoint != "" {
 		q.StartOffset = filepath.Join(q.Prefix, startingPoint)
 	}
-	it := s.client.Bucket(s.baseURL.Host).Objects(ctx, q)
+	it := s.bucket().Objects(ctx, q)
 
 	for {
 		attrs, err := it.Next()

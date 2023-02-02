@@ -18,6 +18,7 @@ type SimpleGStore struct {
 	client           *storage.Client
 	context          context.Context
 	operationTimeout time.Duration
+	userProject      string
 }
 
 func NewSimpleGStore(baseURL string) (*SimpleGStore, error) {
@@ -35,11 +36,13 @@ func NewSimpleGStore(baseURL string) (*SimpleGStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	userProject := base.Query().Get("project")
 
 	return &SimpleGStore{
-		baseURL: base,
-		client:  client,
-		context: ctx,
+		baseURL:     base,
+		client:      client,
+		context:     ctx,
+		userProject: userProject,
 	}, nil
 
 }
@@ -51,6 +54,13 @@ func (s *SimpleGStore) Context() (ctx context.Context, cancel func()) {
 		ctx, cancel = context.WithTimeout(s.context, s.operationTimeout)
 	}
 	return
+}
+
+func (s *SimpleGStore) bucket() *storage.BucketHandle {
+	if s.userProject != "" {
+		return s.client.Bucket(s.baseURL.Host).UserProject(s.userProject)
+	}
+	return s.client.Bucket(s.baseURL.Host)
 }
 
 func (s *SimpleGStore) SetOperationTimeout(d time.Duration) {
@@ -66,7 +76,7 @@ func (s *SimpleGStore) WriteObject(base string, f io.Reader) (err error) {
 
 	ctx, cancel := s.Context()
 	defer cancel()
-	w := s.client.Bucket(s.baseURL.Host).Object(path).NewWriter(ctx)
+	w := s.bucket().Object(path).NewWriter(ctx)
 	w.ContentType = "application/octet-stream"
 	w.CacheControl = "public, max-age=86400"
 
@@ -85,7 +95,7 @@ func (s *SimpleGStore) WriteObject(base string, f io.Reader) (err error) {
 func (s *SimpleGStore) OpenObject(name string) (out io.ReadCloser, err error) {
 	path := s.ObjectPath(name)
 
-	r, err := s.client.Bucket(s.baseURL.Host).Object(path).NewReader(s.context)
+	r, err := s.bucket().Object(path).NewReader(s.context)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +107,7 @@ func (s *SimpleGStore) ListFiles(prefix string, max int) (out []string, err erro
 	path := s.ObjectPath(prefix)
 	ctx, cancel := s.Context()
 	defer cancel()
-	it := s.client.Bucket(s.baseURL.Host).Objects(ctx, &storage.Query{Prefix: path})
+	it := s.bucket().Objects(ctx, &storage.Query{Prefix: path})
 
 	count := 0
 	for {
@@ -125,7 +135,7 @@ func (s *SimpleGStore) FileExists(base string) (bool, error) {
 
 	ctx, cancel := s.Context()
 	defer cancel()
-	_, err := s.client.Bucket(s.baseURL.Host).Object(path).Attrs(ctx)
+	_, err := s.bucket().Object(path).Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
 			return false, nil
