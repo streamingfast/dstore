@@ -311,8 +311,13 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 			Key:    &path,
 		})
 		if err != nil {
-			if err.Error() == "no such key" {
-				err = ErrNotFound
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				case s3.ErrCodeNoSuchBucket:
+					err = fmt.Errorf("s3 bucket %s does not exist", os.Args[1])
+				case s3.ErrCodeNoSuchKey:
+					err = ErrNotFound
+				}
 			}
 			continue
 		}
