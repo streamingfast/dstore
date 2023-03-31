@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/klauspost/compress/zstd"
 )
@@ -37,6 +38,10 @@ func (c *commonStore) pathWithExt(base string) string {
 }
 
 func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	if startingPoint != "" && !strings.HasPrefix(startingPoint, prefix) {
+		return fmt.Errorf("starting point %q must start with prefix %q", startingPoint, prefix)
+	}
+
 	var gatePassed bool
 	return store.Walk(ctx, prefix, func(filename string) error {
 		if gatePassed {

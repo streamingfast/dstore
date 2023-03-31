@@ -1,4 +1,4 @@
-package storetests
+package local
 
 import (
 	"fmt"
@@ -11,23 +11,24 @@ import (
 	"time"
 
 	"github.com/streamingfast/dstore"
+	"github.com/streamingfast/dstore/storetests"
 	"github.com/stretchr/testify/require"
 )
 
 var localStoreBasePath = os.Getenv("STORETESTS_LOCAL_STORE_PATH")
 
 func TestLocalStore(t *testing.T) {
-	TestAll(t, createlocalStoreFactory(t, ""))
+	storetests.TestAll(t, createlocalStoreFactory(t, ""))
 }
 
 func TestLocalStoreCompressedZst(t *testing.T) {
-	TestAll(t, createlocalStoreFactory(t, "zstd"))
+	storetests.TestAll(t, createlocalStoreFactory(t, "zstd"))
 }
 
-func createlocalStoreFactory(t *testing.T, compression string) StoreFactory {
+func createlocalStoreFactory(t *testing.T, compression string) storetests.StoreFactory {
 	random := rand.NewSource(time.Now().UnixNano())
 
-	return func() (dstore.Store, StoreCleanup) {
+	return func() (dstore.Store, storetests.StoreCleanup) {
 		dir := localStoreBasePath
 		removeOnExit := false
 		suffix := "compression-none"
@@ -49,7 +50,7 @@ func createlocalStoreFactory(t *testing.T, compression string) StoreFactory {
 		require.NoError(t, err)
 
 		return store, func() {
-			if noCleanup {
+			if storetests.NoCleanup {
 				return
 			}
 

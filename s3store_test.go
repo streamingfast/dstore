@@ -10,30 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//// use with your own s3 testing endpoint
-//func TestWalkFrom(t *testing.T) {
-//	// requires a helloworld.html file in the bucket
-//	endpoint := "s3://your_test_bucket/?region=ap-northeast-1"
-//
-//	baseURL, err := url.Parse(endpoint)
-//	require.NoError(t, err)
-//
-//	store, err := NewS3Store(baseURL, "", "", false)
-//	require.NoError(t, err)
-//	store.WalkFrom(context.Background(), "", "helloworld.html", func(filename string) error {
-//		assert.Equal(t, "helloworld.html", filename)
-//		return fmt.Errorf("done")
-//	})
-//	assert.NoError(t, err)
-//
-//	store.WalkFrom(context.Background(), "", "hello", func(filename string) error {
-//		assert.Equal(t, "helloworld.html", filename)
-//		return fmt.Errorf("done")
-//	})
-//	assert.NoError(t, err)
-//
-//}
-
 func TestNewS3Store(t *testing.T) {
 	defaultEndpoint := "https://s3.test.amazonaws.com"
 

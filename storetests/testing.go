@@ -18,7 +18,7 @@ import (
 )
 
 var ctx = context.Background()
-var noCleanup = os.Getenv("STORETESTS_NO_CLEANUP") == "true"
+var NoCleanup = os.Getenv("STORETESTS_NO_CLEANUP") == "true"
 
 func TestAll(t *testing.T, factory StoreFactory) {
 	all := [][]StoreTestFunc{

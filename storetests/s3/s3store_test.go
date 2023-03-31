@@ -1,6 +1,7 @@
-package storetests
+package s3
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -13,11 +14,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/streamingfast/dstore"
+	"github.com/streamingfast/dstore/storetests"
+	"github.com/streamingfast/logging"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
+var ctx = context.Background()
+var zlog, tracer = logging.PackageLogger("dstore", "github.com/streamingfast/dstore/storetests/s3")
+
 // For dfusers, one can use:
+//
 //	STORETESTS_S3_STORE_URL="s3://dfuse-customer-outbox/store-tests?region=us-east-2"
 //
 // @see https://s3.console.aws.amazon.com/s3/buckets/dfuse-customer-outbox/?region=us-east-2&tab=overview
@@ -32,9 +39,9 @@ var s3StoreBaseURL = os.Getenv("STORETESTS_S3_STORE_URL")
 // ```
 //
 // And then use:
-//  STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
+//
+//	STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
 var s3MinioStoreBaseURL = os.Getenv("STORETESTS_S3_MINIO_STORE_URL")
-var s3MinioStoreBaseURLEmptyBucket = os.Getenv("STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL")
 
 func TestS3Store(t *testing.T) {
 	if s3StoreBaseURL == "" {
@@ -42,7 +49,7 @@ func TestS3Store(t *testing.T) {
 		return
 	}
 
-	TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", false, false))
+	storetests.TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", false, false))
 }
 
 func TestS3Store_Overwrite(t *testing.T) {
@@ -51,7 +58,7 @@ func TestS3Store_Overwrite(t *testing.T) {
 		return
 	}
 
-	TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", true, false))
+	storetests.TestAll(t, createS3StoreFactory(t, s3StoreBaseURL, "", true, false))
 }
 
 func TestS3Store_Minio(t *testing.T) {
@@ -60,22 +67,22 @@ func TestS3Store_Minio(t *testing.T) {
 		return
 	}
 
-	TestAll(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "", false, false))
+	storetests.TestAll(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "", false, false))
 }
 
-func TestS3Store_Minio_EMPTY_BUCKET_FilePrefix(t *testing.T) {
-	if s3MinioStoreBaseURLEmptyBucket == "" {
-		t.Skip("You must provide a valid Minio S3 URL via STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL environment variable to execute those tests")
+func TestS3Store_Minio_EmptyBucket_FilePrefix(t *testing.T) {
+	if s3MinioStoreBaseURL == "" {
+		t.Skip("You must provide a valid Minio S3 URL via STORETESTS_S3_MINIO_STORE_URL environment variable to execute those tests")
 		return
 	}
 
-	TestWalk_FilePrefix(t, createS3StoreFactory(t, s3MinioStoreBaseURLEmptyBucket, "", false, true))
+	storetests.TestWalk_FilePrefix(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "", false, true))
 }
 
-func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool) StoreFactory {
+func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool) storetests.StoreFactory {
 	random := rand.NewSource(time.Now().UnixNano())
 
-	return func() (dstore.Store, StoreCleanup) {
+	return func() (dstore.Store, storetests.StoreCleanup) {
 		storeURL, err := url.Parse(baseURL)
 		require.NoError(t, err)
 
@@ -110,7 +117,7 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 			prefix := strings.TrimLeft(path, "/") + "/"
 			query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
 			seenFile := ""
-			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, _ bool) bool {
 				for _, el := range page.Contents {
 					seenFile = *el.Key
 				}
@@ -125,19 +132,19 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 		}
 
 		return store, func() {
-			if noCleanup {
+			if storetests.NoCleanup {
 				return
 			}
 
 			prefix := strings.TrimLeft(path, "/") + "/"
 			query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
 
-			if traceEnabled {
+			if tracer.Enabled() {
 				zlog.Debug("cleaning out bucket", zap.String("bucket", bucket), zap.String("prefix", prefix))
 			}
 
 			var innerErr error
-			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, _ bool) bool {
 				for _, el := range page.Contents {
 					_, err := client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
 						Bucket: aws.String(bucket),

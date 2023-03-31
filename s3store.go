@@ -166,12 +166,7 @@ func hasCustomEndpoint(s3URL *url.URL) bool {
 	// operator really intent to use the bucket directly an it contains dot, the
 	// query parameter `infer_aws_endpoint=true` can be used to tell the store
 	// implementation that the hostname is the actual bucket
-	inferEndpoint := s3URL.Query().Get("infer_aws_endpoint")
-	if inferEndpoint != "" {
-		return false
-	}
-
-	return true
+	return s3URL.Query().Get("infer_aws_endpoint") == ""
 }
 
 func (s *S3Store) BaseURL() *url.URL {
@@ -314,7 +309,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 			if aerr, ok := err.(awserr.Error); ok {
 				switch aerr.Code() {
 				case s3.ErrCodeNoSuchBucket:
-					err = fmt.Errorf("s3 bucket %s does not exist", os.Args[1])
+					err = fmt.Errorf("s3 bucket %s does not exist", s.bucket)
 				case s3.ErrCodeNoSuchKey:
 					err = ErrNotFound
 				}
@@ -356,37 +351,55 @@ func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 		}
 	}
 
-	if tracer.Enabled() {
-		zlog.Debug("walking files", zap.String("bucket", s.bucket), zap.String("prefix", targetPrefix))
-	}
-
 	q := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
 		Prefix: &targetPrefix,
 	}
-	// to match 'helloworld.html' by using startAfter, we use 'helloworld.htm' (and we filter again in the walk function  to filter out 'helloworld.htm0')
-	if len(startingPoint) > 1 {
-		rightBeforeStartingPoint := startingPoint[0 : len(startingPoint)-1]
-		q.StartAfter = &rightBeforeStartingPoint
+
+	if startingPoint != "" {
+		if !strings.HasPrefix(startingPoint, prefix) {
+			return fmt.Errorf("starting point %q must start with prefix %q", startingPoint, prefix)
+		}
+
+		// "startingPoint" is known to start with "prefix" (checked above), but our the prefix received do
+		// not contain the "baseURL" which is required because it contains the "path" of the store. So we remove the
+		// "original prefix" from the "startingPoint" and append it to the real "final" prefix instead.
+		relativeStartingPoint := strings.TrimPrefix(startingPoint, prefix)
+
+		// to match 'helloworld.html' by using startAfter, we use 'helloworld.htm' (and we filter again in the walk function  to filter out 'helloworld.htm0')
+		if len(relativeStartingPoint) > 1 {
+			rightBeforeStartingPoint := relativeStartingPoint[0 : len(relativeStartingPoint)-1]
+			startAfter := targetPrefix + rightBeforeStartingPoint
+
+			// StartAfter is also known as 'marker' within S3 compatible layer
+			q.StartAfter = &startAfter
+		}
+	}
+
+	if tracer.Enabled() {
+		zlog.Info("walking files from", zap.String("original_prefix", targetPrefix), zap.String("prefix", targetPrefix), zap.Stringp("start_after", q.StartAfter))
 	}
 
 	var innerErr error
-	err := s.service.ListObjectsV2PagesWithContext(ctx, q, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+	err := s.service.ListObjectsV2PagesWithContext(ctx, q, func(page *s3.ListObjectsV2Output, _ bool) bool {
 		for _, el := range page.Contents {
 			filename := s.toBaseName(*el.Key)
 			if filename == "" {
 				zlog.Debug("got an empty filename from s3 store, ignoring it", zap.String("key", *el.Key))
 				continue
 			}
+
 			if startingPoint != "" {
 				if filename < startingPoint {
 					continue
 				}
 			}
+
 			if err := f(filename); err != nil {
 				if err == StopIteration {
 					return false
 				}
+
 				innerErr = err
 				return false
 			}

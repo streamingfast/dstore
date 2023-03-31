@@ -220,9 +220,24 @@ func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 			q.Prefix = q.Prefix + "/"
 		}
 	}
+
 	if startingPoint != "" {
-		q.StartOffset = filepath.Join(q.Prefix, startingPoint)
+		if !strings.HasPrefix(startingPoint, prefix) {
+			return fmt.Errorf("starting point %q must start with prefix %q", startingPoint, prefix)
+		}
+
+		// "startingPoint" is known to start with "prefix" (checked when entering function), but our the prefix received do
+		// not contain the "baseURL" which is required because it contains the "path" of the store. So we remove the
+		// "original prefix" from the "startingPoint" and append it to the real "final" prefix instead.
+		relativeStartingPoint := strings.TrimPrefix(startingPoint, prefix)
+
+		q.StartOffset = filepath.Join(q.Prefix, relativeStartingPoint)
 	}
+
+	if tracer.Enabled() {
+		zlog.Info("walking files from", zap.String("original_prefix", prefix), zap.String("prefix", q.Prefix), zap.String("start_offset", q.StartOffset))
+	}
+
 	it := s.bucket().Objects(ctx, q)
 
 	for {

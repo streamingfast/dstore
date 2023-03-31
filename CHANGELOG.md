@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 # Unreleased
 
+## Fixed
+
+* Fixed `WalkFrom` on `S3` and `GCS` when both `Prefix` and `StartingPoint` was provided.
+
 ## Added
 
 * Added `dstore.ReadObject` to easily read a single file from a `fileURL`.

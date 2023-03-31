@@ -213,7 +213,6 @@ func (s *MockStore) ListFiles(ctx context.Context, prefix string, max int) ([]st
 
 func (s *MockStore) SetOverwrite(in bool) {
 	s.shouldOverwrite = in
-	return
 }
 
 func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {

@@ -24,7 +24,7 @@ Some of the store implementations can be tested directly while few others, from 
 essentially, requires some extra environment variables to run. They are skip if the correct
 environment variables for the provider is not set.
 
-To run the full test suite, you will need to peform the following steps.
+To run the full test suite, you will need to perform the following steps.
 
 First, you will need to have locally a few dependencies:
 - [minio](https://github.com/minio/minio)
@@ -42,10 +42,12 @@ Ensure you have access to GCP Storage Bucket, S3 Bucket, then run the full test 
 ```bash
 STORETESTS_GS_STORE_URL="gs://streamingfast-developement-random/store-tests"\
 STORETESTS_S3_STORE_URL="s3://streamingfast-customer-outbox/store-tests?region=us-east-2"\
-STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
-STORETESTS_S3_MINIO_STORE_EMPTY_BUCKET_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin" # this bucket MUST be empty for the test to run
+STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"\
 go test ./...
 ```
+
+> **Note** S3 bucket is not existing anymore, you need to provide your own.
+
 ## Contributing
 
 **Issues and PR in this repo related strictly to the dstore library.**
