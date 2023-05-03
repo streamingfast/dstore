@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"github.com/googleapis/gax-go/v2"
 	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -34,6 +35,8 @@ func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite b
 		return nil, err
 	}
 	userProject := baseURL.Query().Get("project")
+
+	client.SetRetry(storage.WithBackoff(gax.Backoff{}))
 
 	return &GSStore{
 		baseURL: baseURL,
