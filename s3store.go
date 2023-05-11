@@ -64,6 +64,10 @@ type S3Store struct {
 	*commonStore
 }
 
+func (s *S3Store) Clone(ctx context.Context) (Store, error) {
+	return NewS3Store(s.baseURL, s.extension, s.compressionType, s.overwrite)
+}
+
 func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite bool) (*S3Store, error) {
 	s := &S3Store{
 		baseURL: baseURL,
