@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Added
 
+* Added Clonable interface so you can call `dstore.Clone(ctx)` on a remote store, instantiate a new network client and context.
+
 * Added `dstore.ReadObject` to easily read a single file from a `fileURL`.
 
 * Added `dstore.NewStoreFromFileURL` to replace `dstore.NewStoreFromURL` which was not clear that it's usage is meant to create a store from a file directly.

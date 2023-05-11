@@ -44,6 +44,10 @@ type Store interface {
 	SetMeter(meter Meter)
 }
 
+type Clonable interface {
+	Clone(context.Context) (Store, error)
+}
+
 var StopIteration = errors.New("stop iteration")
 
 func NewDBinStore(baseURL string) (Store, error) {

@@ -28,8 +28,7 @@ type GSStore struct {
 	*commonStore
 }
 
-func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*GSStore, error) {
-	ctx := context.Background()
+func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool) (*GSStore, error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, err
@@ -49,6 +48,16 @@ func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite b
 		userProject: userProject,
 	}, nil
 }
+
+func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*GSStore, error) {
+	ctx := context.Background()
+	return newGSStoreContext(ctx, baseURL, extension, compressionType, overwrite)
+}
+
+func (s *GSStore) Clone(ctx context.Context) (Store, error) {
+	return newGSStoreContext(ctx, s.baseURL, s.extension, s.compressionType, s.overwrite)
+}
+
 func (s *GSStore) SubStore(subFolder string) (Store, error) {
 	url, err := url.Parse(s.baseURL.String())
 	if err != nil {

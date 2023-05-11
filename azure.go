@@ -56,6 +56,11 @@ func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrit
 	}, nil
 }
 
+// context not used here
+func (s *AzureStore) Clone(_ context.Context) (Store, error) {
+	return NewAzureStore(s.baseURL, s.extension, s.compressionType, s.overwrite)
+}
+
 func (s *AzureStore) SubStore(subFolder string) (Store, error) {
 	url, err := url.Parse(s.baseURL.String())
 	if err != nil {
