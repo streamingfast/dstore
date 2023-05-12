@@ -2,6 +2,7 @@ package dstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -123,7 +124,7 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 		}
 
 		if err := f(s.toBaseName(infoPath)); err != nil {
-			if err == StopIteration {
+			if errors.Is(err, StopIteration) {
 				return nil
 			}
 			return err

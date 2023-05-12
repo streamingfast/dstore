@@ -3,6 +3,7 @@ package dstore
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -400,7 +401,7 @@ func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 			}
 
 			if err := f(filename); err != nil {
-				if err == StopIteration {
+				if errors.Is(err, StopIteration) {
 					return false
 				}
 

@@ -3,6 +3,7 @@ package dstore
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -234,7 +235,7 @@ func (s *MockStore) Walk(ctx context.Context, prefix string, f func(filename str
 		}
 		if strings.HasPrefix(file, prefix) {
 			if err := f(file); err != nil {
-				if err == StopIteration {
+				if errors.Is(err, StopIteration) {
 					return nil
 				}
 				return err

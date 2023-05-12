@@ -31,6 +31,12 @@ type Store interface {
 
 	WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error
 
+	// Walk recursively all files starting with the given prefix within this store. The `f` callback is invoked
+	// for each file found.
+	//
+	// If you return `dstore.StopIteration` from your callback, iteration stops right away and `nil` will
+	// returned by the `Walk` function. If your callback returns any error, iteration stops right away and
+	// callback returned error is return by the `Walk` function.
 	Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error
 	ListFiles(ctx context.Context, prefix string, max int) ([]string, error)
 
