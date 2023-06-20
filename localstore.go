@@ -54,6 +54,10 @@ func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrit
 	}, nil
 }
 
+func (s *LocalStore) Clone(ctx context.Context) (Store, error) {
+	return NewLocalStore(s.baseURL, s.extension, s.compressionType, s.overwrite)
+}
+
 func (s *LocalStore) SubStore(subFolder string) (Store, error) {
 	basePath := s.baseURL.Path
 	newPath := path.Join(basePath, subFolder)
