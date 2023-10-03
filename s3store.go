@@ -333,6 +333,9 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 			out, err = s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
 		} else {
 			out, err = s.uncompressedReader(reader.Body)
+			if err = reader.Body.Close(); err != nil {
+				continue
+			}
 		}
 		if tracer.Enabled() {
 			out = wrapReadCloser(out, func() {
