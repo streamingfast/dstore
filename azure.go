@@ -134,6 +134,10 @@ func (a *AzureStore) ObjectAttributes(ctx context.Context, base string) (*Object
 }
 
 func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+	ctx = withFile(ctx, base)
+	ctx = withStore(ctx, "azure")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	path := a.ObjectPath(base)
 
 	exists, err := a.FileExists(ctx, base)
@@ -150,15 +154,15 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 	writeDone := make(chan error, 1)
 	ctx, cancel := context.WithCancel(ctx)
 
-	go func() {
+	go func(ctx context.Context) {
 		defer pipeWrite.Close()
 
-		err := a.compressedCopy(pipeWrite, f)
+		err := a.compressedCopy(ctx, pipeWrite, f)
 		if err != nil {
 			cancel()
 		}
 		writeDone <- err
-	}()
+	}(ctx)
 
 	bufferSize := 1 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
 	maxBuffers := 3               // Number of rotating buffers that are used when uploading
@@ -182,6 +186,10 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 }
 
 func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+	ctx = withFile(ctx, name)
+	ctx = withStore(ctx, "azure")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	path := a.ObjectPath(name)
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
@@ -197,7 +205,7 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 
 	reader := get.Body(azblob.RetryReaderOptions{})
 
-	return a.uncompressedReader(reader)
+	return a.uncompressedReader(ctx, reader)
 }
 
 func (a *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {

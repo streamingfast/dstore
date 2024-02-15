@@ -140,6 +140,10 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 }
 
 func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Reader) (err error) {
+	ctx = withFile(ctx, base)
+	ctx = withStore(ctx, "localstore")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	destPath := s.ObjectPath(base)
 
 	tempPath := destPath + "." + randomString(8) + ".tmp"
@@ -154,7 +158,7 @@ func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Rea
 		return fmt.Errorf("unable to create file %q: %w", tempPath, err)
 	}
 
-	if err := s.compressedCopy(file, reader); err != nil {
+	if err := s.compressedCopy(ctx, file, reader); err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
@@ -179,6 +183,10 @@ func (s *LocalStore) CopyObject(ctx context.Context, src, dest string) error {
 }
 
 func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+	ctx = withFile(ctx, name)
+	ctx = withStore(ctx, "localstore")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	path := s.ObjectPath(name)
 
 	if tracer.Enabled() {
@@ -194,7 +202,7 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	}
 
 	reader := NewBufferedFileReadCloser(file)
-	out, err = s.uncompressedReader(reader)
+	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
 			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))

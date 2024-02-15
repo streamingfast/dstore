@@ -106,6 +106,10 @@ func (s *GSStore) CopyObject(ctx context.Context, src, dest string) error {
 }
 
 func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+	ctx = withFile(ctx, base)
+	ctx = withStore(ctx, "gstore")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	path := s.ObjectPath(base)
 
 	object := s.bucket().Object(path)
@@ -117,7 +121,7 @@ func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	w.ContentType = "application/octet-stream"
 	w.CacheControl = "public, max-age=86400"
 
-	if err := s.compressedCopy(w, f); err != nil {
+	if err := s.compressedCopy(ctx, w, f); err != nil {
 		return err
 	}
 
@@ -141,6 +145,10 @@ func silencePreconditionError(err error) error {
 }
 
 func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+	ctx = withFile(ctx, name)
+	ctx = withStore(ctx, "gstore")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	path := s.ObjectPath(name)
 
 	if tracer.Enabled() {
@@ -155,7 +163,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		return nil, err
 	}
 
-	out, err = s.uncompressedReader(reader)
+	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
 			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))

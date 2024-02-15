@@ -187,6 +187,10 @@ func (s *S3Store) ObjectURL(name string) string {
 }
 
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+	ctx = withFile(ctx, base)
+	ctx = withStore(ctx, "s3store")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	objPath := s.ObjectPath(base)
 
 	exists, err := s.FileExists(ctx, base)
@@ -206,17 +210,17 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	go func() {
+	go func(ctx context.Context) {
 		defer wg.Done()
 
-		err := s.compressedCopy(pw, f)
+		err := s.compressedCopy(ctx, pw, f)
 		writeDone <- err
 		pw.Close() // required to allow the uploader to complete
 
 		if err != nil {
 			cancel()
 		}
-	}()
+	}(ctx)
 
 	_, err = s.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
@@ -288,6 +292,10 @@ func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 }
 
 func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+	ctx = withFile(ctx, name)
+	ctx = withStore(ctx, "s3store")
+	ctx = withLogger(ctx, zlog, tracer)
+
 	path := s.ObjectPath(name)
 
 	if tracer.Enabled() {
@@ -330,9 +338,9 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 			if err = reader.Body.Close(); err != nil {
 				continue
 			}
-			out, err = s.uncompressedReader(ioutil.NopCloser(bytes.NewReader(data)))
+			out, err = s.uncompressedReader(ctx, ioutil.NopCloser(bytes.NewReader(data)))
 		} else {
-			out, err = s.uncompressedReader(reader.Body)
+			out, err = s.uncompressedReader(ctx, reader.Body)
 		}
 		if tracer.Enabled() {
 			out = wrapReadCloser(out, func() {

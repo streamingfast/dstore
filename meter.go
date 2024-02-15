@@ -1,15 +1,22 @@
 package dstore
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 type Meter interface {
 	AddBytesRead(int)
 	AddBytesWritten(int)
+
+	AddBytesWrittenCtx(context.Context, int)
+	AddBytesReadCtx(context.Context, int)
 }
 
 type meteredWriter struct {
-	w io.Writer
-	m Meter
+	w   io.Writer
+	m   Meter
+	ctx context.Context
 }
 
 func (mw *meteredWriter) Write(p []byte) (n int, err error) {
@@ -18,13 +25,14 @@ func (mw *meteredWriter) Write(p []byte) (n int, err error) {
 		return
 	}
 
-	mw.m.AddBytesWritten(n)
+	mw.m.AddBytesWrittenCtx(mw.ctx, n)
 	return
 }
 
 type meteredReadCloser struct {
-	rc io.ReadCloser
-	m  Meter
+	rc  io.ReadCloser
+	m   Meter
+	ctx context.Context
 }
 
 func (mr *meteredReadCloser) Read(p []byte) (n int, err error) {
@@ -33,7 +41,7 @@ func (mr *meteredReadCloser) Read(p []byte) (n int, err error) {
 		return
 	}
 
-	mr.m.AddBytesRead(n)
+	mr.m.AddBytesReadCtx(mr.ctx, n)
 	return
 }
 

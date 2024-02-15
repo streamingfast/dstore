@@ -92,9 +92,9 @@ func listFiles(ctx context.Context, store Store, prefix string, max int) (out []
 	return
 }
 
-func (c *commonStore) compressedCopy(w io.Writer, f io.Reader) error {
+func (c *commonStore) compressedCopy(ctx context.Context, w io.Writer, f io.Reader) error {
 	if c.meter != nil {
-		w = &meteredWriter{w: w, m: c.meter}
+		w = &meteredWriter{w: w, m: c.meter, ctx: ctx}
 	}
 
 	switch c.compressionType {
@@ -125,9 +125,9 @@ func (c *commonStore) compressedCopy(w io.Writer, f io.Reader) error {
 	return nil
 }
 
-func (c *commonStore) uncompressedReader(reader io.ReadCloser) (out io.ReadCloser, err error) {
+func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadCloser) (out io.ReadCloser, err error) {
 	if c.meter != nil {
-		reader = &meteredReadCloser{rc: reader, m: c.meter}
+		reader = &meteredReadCloser{rc: reader, m: c.meter, ctx: ctx}
 	}
 
 	switch c.compressionType {
