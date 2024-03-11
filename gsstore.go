@@ -231,6 +231,8 @@ func (s *GSStore) Walk(ctx context.Context, prefix string, f func(filename strin
 
 func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	q := &storage.Query{}
+
+	q.SetAttrSelection([]string{"Name"}) // only fetch the name, 25% faster
 	q.Prefix = strings.TrimLeft(s.baseURL.Path, "/") + "/"
 	if prefix != "" {
 		q.Prefix = filepath.Join(q.Prefix, prefix)

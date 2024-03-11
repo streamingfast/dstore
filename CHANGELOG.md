@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Changed
 
+* Improved 'Walk' speed on gstore by 25% by only fetching 'Name'
+
 * Store `dstore.MockStore` now opened up public access to `Files` to easily get all written content.
 
 * BREAKING: `MockStore`'s `SubStore` method has changed behavior. It now removes the prefix from files already present, to conform to the behavior of other stores. This might affect your use of `MockStore::SetFile()` in tests.
