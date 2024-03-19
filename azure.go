@@ -186,11 +186,11 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 }
 
 func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withFile(ctx, name)
 	ctx = withStore(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := a.ObjectPath(name)
+	ctx = withFile(ctx, path)
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
 

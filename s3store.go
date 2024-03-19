@@ -292,11 +292,11 @@ func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 }
 
 func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withFile(ctx, name)
 	ctx = withStore(ctx, "s3store")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
+	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))

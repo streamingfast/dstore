@@ -11,6 +11,7 @@ type Meter interface {
 
 	AddBytesWrittenCtx(context.Context, int)
 	AddBytesReadCtx(context.Context, int)
+	BytesRead() uint64
 }
 
 type meteredWriter struct {
