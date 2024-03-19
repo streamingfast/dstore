@@ -205,7 +205,7 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
-			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))
+			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(path)), zap.Uint64("total_read_bytes", s.meter.BytesRead()))
 		})
 	}
 	return
