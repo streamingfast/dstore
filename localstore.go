@@ -183,14 +183,14 @@ func (s *LocalStore) CopyObject(ctx context.Context, src, dest string) error {
 }
 
 func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withFile(ctx, name)
 	ctx = withStore(ctx, "localstore")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
+	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
-		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))
+		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(path)))
 	}
 
 	file, err := os.Open(path)
@@ -205,7 +205,7 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
-			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))
+			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(path)))
 		})
 	}
 	return

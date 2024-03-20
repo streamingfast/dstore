@@ -145,14 +145,14 @@ func silencePreconditionError(err error) error {
 }
 
 func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withFile(ctx, name)
 	ctx = withStore(ctx, "gstore")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
+	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
-		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(name)))
+		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(path)))
 	}
 	reader, err := s.bucket().Object(path).NewReader(ctx)
 	if err != nil {
@@ -166,7 +166,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
-			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(name)))
+			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(path)))
 		})
 	}
 	return

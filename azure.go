@@ -3,6 +3,7 @@ package dstore
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/url"
 	"os"
@@ -186,11 +187,15 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 }
 
 func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withFile(ctx, name)
 	ctx = withStore(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := a.ObjectPath(name)
+	ctx = withFile(ctx, path)
+
+	if tracer.Enabled() {
+		zlog.Debug("opening dstore file", zap.String("path", a.pathWithExt(path)))
+	}
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
 
@@ -205,7 +210,13 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 
 	reader := get.Body(azblob.RetryReaderOptions{})
 
-	return a.uncompressedReader(ctx, reader)
+	out, err = a.uncompressedReader(ctx, reader)
+	if tracer.Enabled() {
+		out = wrapReadCloser(out, func() {
+			zlog.Debug("closing dstore file", zap.String("path", a.pathWithExt(path)))
+		})
+	}
+	return
 }
 
 func (a *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
