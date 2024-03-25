@@ -194,7 +194,7 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
-		zlog.Debug("opening dstore file", zap.String("path", a.pathWithExt(path)))
+		zlog.Debug("opening dstore file", zap.String("path", path))
 	}
 
 	blobURL := a.containerURL.NewBlockBlobURL(path)
@@ -213,7 +213,7 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	out, err = a.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
-			zlog.Debug("closing dstore file", zap.String("path", a.pathWithExt(path)))
+			zlog.Debug("closing dstore file", zap.String("path", path))
 		})
 	}
 	return

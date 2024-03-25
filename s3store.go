@@ -299,7 +299,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
-		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(path)))
+		zlog.Debug("opening dstore file", zap.String("path", path))
 	}
 
 	for i := 0; i < s3ReadAttempts; i++ {
@@ -344,7 +344,7 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		}
 		if tracer.Enabled() {
 			out = wrapReadCloser(out, func() {
-				zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(path)))
+				zlog.Debug("closing dstore file", zap.String("path", path))
 			})
 		}
 		return out, err
