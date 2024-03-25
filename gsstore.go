@@ -152,7 +152,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
-		zlog.Debug("opening dstore file", zap.String("path", s.pathWithExt(path)))
+		zlog.Debug("opening dstore file", zap.String("path", path))
 	}
 	reader, err := s.bucket().Object(path).NewReader(ctx)
 	if err != nil {
@@ -166,7 +166,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
-			zlog.Debug("closing dstore file", zap.String("path", s.pathWithExt(path)))
+			zlog.Debug("closing dstore file", zap.String("path", path))
 		})
 	}
 	return
