@@ -3,7 +3,6 @@ package dstore
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/url"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 )
@@ -91,18 +92,18 @@ func (s *AzureStore) BaseURL() *url.URL {
 	return s.baseURL
 }
 
-func (a *AzureStore) ObjectPath(name string) string {
-	return path.Join(strings.TrimLeft(a.baseURL.Path, "/"), a.pathWithExt(name))
+func (s *AzureStore) ObjectPath(name string) string {
+	return path.Join(strings.TrimLeft(s.baseURL.Path, "/"), s.pathWithExt(name))
 }
 
-func (a *AzureStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(a.baseURL.String(), "/"), strings.TrimLeft(a.pathWithExt(name), "/"))
+func (s *AzureStore) ObjectURL(name string) string {
+	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
 }
 
-func (a *AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
-	path := a.ObjectPath(base)
+func (s *AzureStore) FileExists(ctx context.Context, base string) (bool, error) {
+	path := s.ObjectPath(base)
 
-	blobURL := a.containerURL.NewBlockBlobURL(path)
+	blobURL := s.containerURL.NewBlockBlobURL(path)
 	_, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
 
@@ -119,10 +120,10 @@ func (a *AzureStore) FileExists(ctx context.Context, base string) (bool, error) 
 	return true, nil
 }
 
-func (a *AzureStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
-	path := a.ObjectPath(base)
+func (s *AzureStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
+	path := s.ObjectPath(base)
 
-	blobURL := a.containerURL.NewBlockBlobURL(path)
+	blobURL := s.containerURL.NewBlockBlobURL(path)
 	props, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
 		return nil, err
@@ -134,19 +135,19 @@ func (a *AzureStore) ObjectAttributes(ctx context.Context, base string) (*Object
 	}, nil
 }
 
-func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	ctx = withFile(ctx, base)
 	ctx = withStore(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
 
-	path := a.ObjectPath(base)
+	path := s.ObjectPath(base)
 
-	exists, err := a.FileExists(ctx, base)
+	exists, err := s.FileExists(ctx, base)
 	if err != nil {
 		return err
 	}
 
-	if !a.overwrite && exists {
+	if !s.overwrite && exists {
 		// We silently ignore when we ask not to overwrite
 		return nil
 	}
@@ -158,7 +159,7 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 	go func(ctx context.Context) {
 		defer pipeWrite.Close()
 
-		err := a.compressedCopy(ctx, pipeWrite, f)
+		err := s.compressedCopy(ctx, pipeWrite, f)
 		if err != nil {
 			cancel()
 		}
@@ -167,7 +168,7 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 
 	bufferSize := 1 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
 	maxBuffers := 3               // Number of rotating buffers that are used when uploading
-	blobURL := a.containerURL.NewBlockBlobURL(path)
+	blobURL := s.containerURL.NewBlockBlobURL(path)
 	blobHeader := azblob.BlobHTTPHeaders{
 		ContentType:  "application/octet-stream",
 		CacheControl: "public, max-age=86400",
@@ -186,18 +187,18 @@ func (a *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 	return nil
 }
 
-func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
+func (s *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
 	ctx = withStore(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
 
-	path := a.ObjectPath(name)
+	path := s.ObjectPath(name)
 	ctx = withFile(ctx, path)
 
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", path))
 	}
 
-	blobURL := a.containerURL.NewBlockBlobURL(path)
+	blobURL := s.containerURL.NewBlockBlobURL(path)
 
 	get, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
@@ -210,7 +211,7 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 
 	reader := get.Body(azblob.RetryReaderOptions{})
 
-	out, err = a.uncompressedReader(ctx, reader)
+	out, err = s.uncompressedReader(ctx, reader)
 	if tracer.Enabled() {
 		out = wrapReadCloser(out, func() {
 			zlog.Debug("closing dstore file", zap.String("path", path))
@@ -219,8 +220,8 @@ func (a *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 	return
 }
 
-func (a *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
-	remove, err := pushLocalFile(ctx, a, localFile, toBaseName)
+func (s *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
+	remove, err := pushLocalFile(ctx, s, localFile, toBaseName)
 	if err != nil {
 		return err
 	}
@@ -231,9 +232,9 @@ func (s *AzureStore) WalkFrom(ctx context.Context, prefix, startingPoint string,
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
-func (a *AzureStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
+func (s *AzureStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 
-	p := strings.TrimLeft(a.baseURL.Path, "/") + "/"
+	p := strings.TrimLeft(s.baseURL.Path, "/") + "/"
 	if prefix != "" {
 		p = filepath.Join(p, prefix)
 		// join cleans the string and will remove the trailing / in the prefix is present.
@@ -245,7 +246,7 @@ func (a *AzureStore) Walk(ctx context.Context, prefix string, f func(filename st
 
 	for marker := (azblob.Marker{}); marker.NotDone(); { // The parens around Marker{} are required to avoid compiler error.
 		// Get a result segment starting with the blob indicated by the current Marker.
-		listBlob, err := a.containerURL.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{
+		listBlob, err := s.containerURL.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{
 			Prefix: p,
 		})
 		if err != nil {
@@ -258,7 +259,7 @@ func (a *AzureStore) Walk(ctx context.Context, prefix string, f func(filename st
 
 		// Process the blobs returned in this result segment (if the segment is empty, the loop body won't execute)
 		for _, blobInfo := range listBlob.Segment.BlobItems {
-			if err := f(a.toBaseName(blobInfo.Name)); err != nil {
+			if err := f(s.toBaseName(blobInfo.Name)); err != nil {
 				if err == StopIteration {
 					return nil
 				}
@@ -268,14 +269,14 @@ func (a *AzureStore) Walk(ctx context.Context, prefix string, f func(filename st
 	return nil
 }
 
-func (a *AzureStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
-	return listFiles(ctx, a, prefix, max)
+func (s *AzureStore) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
+	return listFiles(ctx, s, prefix, max)
 }
 
-func (a AzureStore) DeleteObject(ctx context.Context, base string) error {
-	path := a.ObjectPath(base)
+func (s AzureStore) DeleteObject(ctx context.Context, base string) error {
+	path := s.ObjectPath(base)
 
-	blobURL := a.containerURL.NewBlockBlobURL(path)
+	blobURL := s.containerURL.NewBlockBlobURL(path)
 
 	_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 
