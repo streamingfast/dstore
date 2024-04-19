@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,8 @@ import (
 
 //
 // Google Storage Store
+
+var warnSilenced = os.Getenv("DSTORE_WARN_SILENCED") == "true"
 
 type GSStore struct {
 	baseURL     *url.URL
@@ -129,7 +132,11 @@ func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (er
 		if s.overwrite {
 			return err
 		}
-		return silencePreconditionError(err)
+		silenced := silencePreconditionError(err)
+		if warnSilenced {
+			zlog.Info("silenced precondition error", zap.Error(err), zap.NamedError("silenced", silenced), zap.String("path", path))
+		}
+		return silenced
 	}
 
 	return nil
