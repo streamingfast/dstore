@@ -126,10 +126,6 @@ func (c *commonStore) compressedCopy(ctx context.Context, w io.Writer, f io.Read
 }
 
 func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadCloser) (out io.ReadCloser, err error) {
-	if c.meter != nil {
-		reader = &meteredReadCloser{rc: reader, m: c.meter, ctx: ctx}
-	}
-
 	switch c.compressionType {
 	case "gzip":
 		gzipReader, err := NewGZipReadCloser(reader)
@@ -149,6 +145,9 @@ func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadClos
 		out = reader
 	}
 
+	if c.meter != nil {
+		return &meteredReadCloser{rc: out, m: c.meter, ctx: ctx}, nil
+	}
 	return out, nil
 }
 
