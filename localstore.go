@@ -88,13 +88,13 @@ func (s *LocalStore) WalkFrom(ctx context.Context, prefix, startingPoint string,
 }
 
 func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
-	fullPath := s.basePath + "/"
+	fullPath := s.basePath + string(os.PathSeparator)
 	if prefix != "" {
 		fullPath += prefix
 	}
 
 	walkPath := fullPath
-	if !strings.HasSuffix(fullPath, "/") {
+	if !strings.HasSuffix(fullPath, string(os.PathSeparator)) {
 		// /my/path/0000 -> will walk /my/path, in case `0000` is the prefix of some files within
 		walkPath = filepath.Dir(fullPath)
 	}
@@ -205,7 +205,7 @@ func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCl
 
 func (s *LocalStore) toBaseName(filename string) string {
 	baseName := strings.TrimPrefix(strings.TrimSuffix(filename, s.pathWithExt("")), s.basePath)
-	baseName = strings.TrimPrefix(baseName, "/")
+	baseName = strings.TrimPrefix(strings.TrimPrefix(baseName, "\\"), "/")
 
 	return baseName
 }
@@ -215,7 +215,9 @@ func (s *LocalStore) ObjectPath(name string) string {
 }
 
 func (s *LocalStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
+	// This is **not** converted to use os.PathSeparator, we assume all ObjectURL should be the same accross
+	// all dstore implementations.
+	return fmt.Sprintf("%s/%s", trimPathSeparatorSuffix(s.baseURL.String()), trimPathSeparatorPrefix(s.pathWithExt(name)))
 }
 
 func (s *LocalStore) DeleteObject(ctx context.Context, base string) error {
@@ -275,4 +277,14 @@ func randomString(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+var pathSeparatorCutset = "\\" + "/"
+
+func trimPathSeparatorPrefix(in string) string {
+	return strings.TrimLeft(in, pathSeparatorCutset)
+}
+
+func trimPathSeparatorSuffix(in string) string {
+	return strings.TrimRight(in, pathSeparatorCutset)
 }
