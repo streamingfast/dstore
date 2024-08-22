@@ -23,7 +23,16 @@ type AzureStore struct {
 	containerURL azblob.ContainerURL
 }
 
-func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*AzureStore, error) {
+func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*AzureStore, error) {
+	ctx := context.Background()
+	return newAzureStoreContext(ctx, baseURL, extension, compressionType, overwrite, opts...)
+}
+
+func (s *AzureStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
+	return newAzureStoreContext(ctx, s.baseURL, s.extension, s.compressionType, s.overwrite, opts...)
+}
+
+func newAzureStoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*AzureStore, error) {
 	accountName, containerName, err := decodeAzureScheme(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("specify azure account name and container like: az://account.container/path")
@@ -47,20 +56,26 @@ func NewAzureStore(baseURL *url.URL, extension, compressionType string, overwrit
 	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName))
 	containerURL := azblob.NewContainerURL(*u, p)
 
+	conf := config{}
+	for _, opt := range opts {
+		opt.apply(&conf)
+	}
+
+	common := &commonStore{
+		compressionType:           compressionType,
+		extension:                 extension,
+		overwrite:                 overwrite,
+		uncompressedReadCallback:  conf.uncompressedReadCallback,
+		compressedReadCallback:    conf.compressedReadCallback,
+		uncompressedWriteCallback: conf.uncompressedWriteCallback,
+		compressedWriteCallback:   conf.compressedWriteCallback,
+	}
+
 	return &AzureStore{
 		baseURL:      baseURL,
 		containerURL: containerURL,
-		commonStore: &commonStore{
-			compressionType: compressionType,
-			extension:       extension,
-			overwrite:       overwrite,
-		},
+		commonStore:  common,
 	}, nil
-}
-
-// context not used here
-func (s *AzureStore) Clone(_ context.Context) (Store, error) {
-	return NewAzureStore(s.baseURL, s.extension, s.compressionType, s.overwrite)
 }
 
 func (s *AzureStore) SubStore(subFolder string) (Store, error) {
@@ -136,8 +151,8 @@ func (s *AzureStore) ObjectAttributes(ctx context.Context, base string) (*Object
 }
 
 func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
-	ctx = withFile(ctx, base)
-	ctx = withStore(ctx, "azure")
+	ctx = withFileName(ctx, base)
+	ctx = withStoreType(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(base)
@@ -188,11 +203,11 @@ func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 }
 
 func (s *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withStore(ctx, "azure")
+	ctx = withStoreType(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
-	ctx = withFile(ctx, path)
+	ctx = withFileName(ctx, path)
 
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", path))
@@ -273,7 +288,7 @@ func (s *AzureStore) ListFiles(ctx context.Context, prefix string, max int) ([]s
 	return listFiles(ctx, s, prefix, max)
 }
 
-func (s AzureStore) DeleteObject(ctx context.Context, base string) error {
+func (s *AzureStore) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
 
 	blobURL := s.containerURL.NewBlockBlobURL(path)

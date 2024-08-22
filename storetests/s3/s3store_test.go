@@ -79,7 +79,55 @@ func TestS3Store_Minio_EmptyBucket_FilePrefix(t *testing.T) {
 	storetests.TestWalk_FilePrefix(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "", false, true))
 }
 
-func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool) storetests.StoreFactory {
+func TestS3Store_Minio_CompressionAndMetering(t *testing.T) {
+	compressedReadByteCount := 0
+	compressedWriteByteCount := 0
+	uncompressedReadByteCount := 0
+	uncompressedWriteByteCount := 0
+
+	var uncompressedRead string
+	var compressedRead string
+	var compressedWrite string
+	var uncompressedWrite string
+
+	opts := []dstore.Option{
+		dstore.WithCompressedReadCallback(func(ctx context.Context, i int) {
+			compressedReadByteCount += i
+			compressedRead = "compressedRead"
+		}),
+		dstore.WithUncompressedReadCallback(func(ctx context.Context, i int) {
+			uncompressedReadByteCount += i
+			uncompressedRead = "uncompressedRead"
+		}),
+		dstore.WithCompressedWriteCallback(func(ctx context.Context, i int) {
+			compressedWriteByteCount += i
+			compressedWrite = "compressedWrite"
+		}),
+		dstore.WithUncompressedWriteCallback(func(ctx context.Context, i int) {
+			uncompressedWriteByteCount += i
+			uncompressedWrite = "uncompressedWrite"
+		}),
+	}
+
+	if s3MinioStoreBaseURL == "" {
+		t.Skip("You must provide a valid Google Storage Bucket via STORETESTS_GS_STORE_URL environment variable to execute those tests")
+		return
+	}
+
+	storetests.TestAll(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "zstd", false, false, opts...))
+
+	require.Equal(t, "compressedRead", compressedRead)
+	require.Equal(t, "uncompressedRead", uncompressedRead)
+	require.Equal(t, "compressedWrite", compressedWrite)
+	require.Equal(t, "uncompressedWrite", uncompressedWrite)
+
+	require.True(t, compressedReadByteCount > 0, "compressed read byte count should be greater than 0")
+	require.True(t, compressedWriteByteCount > 0, "compressed write byte count should be greater than 0")
+	require.True(t, uncompressedReadByteCount > 0, "uncompressed read byte count should be greater than 0")
+	require.True(t, uncompressedWriteByteCount > 0, "uncompressed write byte count should be greater than 0")
+}
+
+func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool, opts ...dstore.Option) storetests.StoreFactory {
 	random := rand.NewSource(time.Now().UnixNano())
 
 	return func() (dstore.Store, storetests.StoreDescriptor, storetests.StoreCleanup) {
@@ -105,7 +153,7 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 			zap.String("path", path),
 		)
 
-		store, err := dstore.NewS3Store(storeURL, "", compression, overwrite)
+		store, err := dstore.NewS3Store(storeURL, "", compression, overwrite, opts...)
 		require.NoError(t, err)
 
 		sess, err := session.NewSession(awsConfig)

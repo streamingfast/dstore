@@ -26,7 +26,12 @@ type LocalStore struct {
 	*commonStore
 }
 
-func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*LocalStore, error) {
+func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*LocalStore, error) {
+	ctx := context.Background()
+	return newLocalStoreContext(ctx, baseURL, extension, compressionType, overwrite, opts...)
+}
+
+func newLocalStoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*LocalStore, error) {
 	rand.Seed(time.Now().UnixNano())
 	basePath := filepath.Clean(baseURL.Path)
 	zlog.Debug("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
@@ -43,19 +48,30 @@ func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrit
 		return nil, fmt.Errorf("received base path is a file, expecting it to be a directory")
 	}
 
+	conf := config{}
+	for _, opt := range opts {
+		opt.apply(&conf)
+	}
+
+	common := &commonStore{
+		compressionType:           compressionType,
+		extension:                 extension,
+		overwrite:                 overwrite,
+		uncompressedReadCallback:  conf.uncompressedReadCallback,
+		compressedReadCallback:    conf.compressedReadCallback,
+		uncompressedWriteCallback: conf.uncompressedWriteCallback,
+		compressedWriteCallback:   conf.compressedWriteCallback,
+	}
+
 	return &LocalStore{
-		basePath: basePath,
-		baseURL:  &myBaseURL,
-		commonStore: &commonStore{
-			compressionType: compressionType,
-			extension:       extension,
-			overwrite:       overwrite,
-		},
+		basePath:    basePath,
+		baseURL:     &myBaseURL,
+		commonStore: common,
 	}, nil
 }
 
-func (s *LocalStore) Clone(ctx context.Context) (Store, error) {
-	return NewLocalStore(s.baseURL, s.extension, s.compressionType, s.overwrite)
+func (s *LocalStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
+	return newLocalStoreContext(ctx, s.baseURL, s.extension, s.compressionType, s.overwrite, opts...)
 }
 
 func (s *LocalStore) SubStore(subFolder string) (Store, error) {
@@ -71,7 +87,6 @@ func (s *LocalStore) SubStore(subFolder string) (Store, error) {
 		return nil, err
 	}
 
-	ls.meter = s.meter
 	return ls, nil
 }
 
@@ -140,8 +155,8 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 }
 
 func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Reader) (err error) {
-	ctx = withFile(ctx, base)
-	ctx = withStore(ctx, "localstore")
+	ctx = withFileName(ctx, base)
+	ctx = withStoreType(ctx, "localstore")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	destPath := s.ObjectPath(base)
@@ -183,11 +198,11 @@ func (s *LocalStore) CopyObject(ctx context.Context, src, dest string) error {
 }
 
 func (s *LocalStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withStore(ctx, "localstore")
+	ctx = withStoreType(ctx, "localstore")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
-	ctx = withFile(ctx, path)
+	ctx = withFileName(ctx, path)
 
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", path))

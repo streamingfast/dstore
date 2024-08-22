@@ -30,8 +30,6 @@ type MockStore struct {
 
 	Files           map[string][]byte
 	shouldOverwrite bool
-
-	meter Meter
 }
 
 func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockStore {
@@ -56,7 +54,6 @@ func (s *MockStore) SubStore(subFolder string) (Store, error) {
 
 	return &MockStore{
 		Files:             newFiles,
-		meter:             s.meter,
 		shouldOverwrite:   s.shouldOverwrite,
 		OpenObjectFunc:    s.OpenObjectFunc,
 		WriteObjectFunc:   s.WriteObjectFunc,
@@ -272,8 +269,4 @@ func (s *MockStore) PushLocalFile(ctx context.Context, localFile string, toBaseN
 
 func (s *MockStore) Overwrite() bool {
 	return s.shouldOverwrite
-}
-
-func (s *MockStore) SetMeter(meter Meter) {
-	s.meter = meter
 }

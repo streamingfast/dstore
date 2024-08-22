@@ -2,9 +2,9 @@ package dstore
 
 import (
 	"context"
-	"io"
 )
 
+// Deprecated: This interface will no longer be used, use the Options to inject all metering logic from the upstream code instead
 type Meter interface {
 	AddBytesRead(int)
 	AddBytesWritten(int)
@@ -13,38 +13,26 @@ type Meter interface {
 	AddBytesReadCtx(context.Context, int)
 }
 
-type meteredWriter struct {
-	w   io.Writer
-	m   Meter
-	ctx context.Context
-}
-
-func (mw *meteredWriter) Write(p []byte) (n int, err error) {
-	n, err = mw.w.Write(p)
-	if mw.m == nil {
+// Deprecated: Use the Options to add callbacks to inject metering from the upstream code instead
+func (c *commonStore) SetMeter(meter Meter) {
+	// if any of the callbacks are defined, ignore this
+	if c.compressedReadCallback != nil || c.uncompressedWriteCallback != nil || c.compressedWriteCallback != nil || c.uncompressedReadCallback != nil {
+		zlog.Warn("Callbacks have already been defined, SetMeter will not override them")
 		return
 	}
 
-	mw.m.AddBytesWrittenCtx(mw.ctx, n)
-	return
-}
+	zlog.Warn("SetMeter is deprecated, use the dstore Options to add callbacks to inject metering from the upstream code instead")
 
-type meteredReadCloser struct {
-	rc  io.ReadCloser
-	m   Meter
-	ctx context.Context
-}
+	//imitate the old behavior:
 
-func (mr *meteredReadCloser) Read(p []byte) (n int, err error) {
-	n, err = mr.rc.Read(p)
-	if mr.m == nil {
-		return
+	c.compressedReadCallback = func(ctx context.Context, n int) {
+		meter.AddBytesRead(n)
 	}
 
-	mr.m.AddBytesReadCtx(mr.ctx, n)
-	return
+	c.uncompressedWriteCallback = func(ctx context.Context, n int) {
+		meter.AddBytesWritten(n)
+	}
 }
 
-func (mr *meteredReadCloser) Close() error {
-	return mr.rc.Close()
-}
+// Deprecated: SetMeter on MockStore no longer does anything
+func (_ *MockStore) SetMeter(_ Meter) {}
