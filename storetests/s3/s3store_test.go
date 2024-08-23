@@ -82,7 +82,7 @@ func TestS3Store_Minio_EmptyBucket_FilePrefix(t *testing.T) {
 func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool) storetests.StoreFactory {
 	random := rand.NewSource(time.Now().UnixNano())
 
-	return func() (dstore.Store, storetests.StoreCleanup) {
+	return func() (dstore.Store, storetests.StoreDescriptor, storetests.StoreCleanup) {
 		storeURL, err := url.Parse(baseURL)
 		require.NoError(t, err)
 
@@ -131,35 +131,37 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 			}
 		}
 
-		return store, func() {
-			if storetests.NoCleanup {
-				return
-			}
-
-			prefix := strings.TrimLeft(path, "/") + "/"
-			query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
-
-			if tracer.Enabled() {
-				zlog.Debug("cleaning out bucket", zap.String("bucket", bucket), zap.String("prefix", prefix))
-			}
-
-			var innerErr error
-			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, _ bool) bool {
-				for _, el := range page.Contents {
-					_, err := client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
-						Bucket: aws.String(bucket),
-						Key:    el.Key,
-					})
-					if err != nil {
-						innerErr = err
-						return false
-					}
+		return store, storetests.StoreDescriptor{
+				Compression: compression,
+			}, func() {
+				if storetests.NoCleanup {
+					return
 				}
-				return true
-			})
 
-			require.NoError(t, err)
-			require.NoError(t, innerErr)
-		}
+				prefix := strings.TrimLeft(path, "/") + "/"
+				query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
+
+				if tracer.Enabled() {
+					zlog.Debug("cleaning out bucket", zap.String("bucket", bucket), zap.String("prefix", prefix))
+				}
+
+				var innerErr error
+				err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, _ bool) bool {
+					for _, el := range page.Contents {
+						_, err := client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
+							Bucket: aws.String(bucket),
+							Key:    el.Key,
+						})
+						if err != nil {
+							innerErr = err
+							return false
+						}
+					}
+					return true
+				})
+
+				require.NoError(t, err)
+				require.NoError(t, innerErr)
+			}
 	}
 }

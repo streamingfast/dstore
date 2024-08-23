@@ -37,8 +37,12 @@ func TestAll(t *testing.T, factory StoreFactory) {
 	}
 }
 
+type StoreDescriptor struct {
+	Compression string
+}
+
 type StoreCleanup func()
-type StoreFactory func() (dstore.Store, StoreCleanup)
+type StoreFactory func() (dstore.Store, StoreDescriptor, StoreCleanup)
 type StoreTestFunc func(t *testing.T, factory StoreFactory)
 
 // getFunctionName reads the program counter adddress and return the function

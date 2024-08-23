@@ -16,7 +16,7 @@ var writeObjectTests = []StoreTestFunc{
 }
 
 func TestWriteObject_Basic(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	content := "hello world"
@@ -30,7 +30,7 @@ func TestWriteObject_Basic(t *testing.T, factory StoreFactory) {
 }
 
 func TestWriteObject_ConcurrentOverwrite(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	if !supportsConcurrentWrites(store) {
@@ -71,7 +71,7 @@ func TestWriteObject_ConcurrentOverwrite(t *testing.T, factory StoreFactory) {
 }
 
 func TestWriteObject_ConcurrentNoOverwrite(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	if !supportsConcurrentWrites(store) {

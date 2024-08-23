@@ -28,7 +28,7 @@ func TestLocalStoreCompressedZst(t *testing.T) {
 func createlocalStoreFactory(t *testing.T, compression string) storetests.StoreFactory {
 	random := rand.NewSource(time.Now().UnixNano())
 
-	return func() (dstore.Store, storetests.StoreCleanup) {
+	return func() (dstore.Store, storetests.StoreDescriptor, storetests.StoreCleanup) {
 		dir := localStoreBasePath
 		removeOnExit := false
 		suffix := "compression-none"
@@ -49,14 +49,16 @@ func createlocalStoreFactory(t *testing.T, compression string) storetests.StoreF
 		store, err := dstore.NewLocalStore(&url.URL{Scheme: "file", Path: dir}, "", compression, false)
 		require.NoError(t, err)
 
-		return store, func() {
-			if storetests.NoCleanup {
-				return
-			}
+		return store, storetests.StoreDescriptor{
+				Compression: compression,
+			}, func() {
+				if storetests.NoCleanup {
+					return
+				}
 
-			if removeOnExit {
-				os.RemoveAll(dir)
+				if removeOnExit {
+					os.RemoveAll(dir)
+				}
 			}
-		}
 	}
 }

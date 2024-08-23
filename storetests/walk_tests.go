@@ -22,7 +22,7 @@ var walkTests = []StoreTestFunc{
 }
 
 func TestWalk_IgnoreNotFound(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	err := store.Walk(ctx, "bubblicious/0000", func(f string) error { return nil })
@@ -30,7 +30,7 @@ func TestWalk_IgnoreNotFound(t *testing.T, factory StoreFactory) {
 }
 
 func TestWalk_FilePrefix(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	expected := []string{"00000001", "00000002", "00000003"}
@@ -52,7 +52,7 @@ func TestWalk_FilePrefix(t *testing.T, factory StoreFactory) {
 }
 
 func TestWalkFrom(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	written := []string{"00000001", "00000002", "00000003", "00000004"}
@@ -75,7 +75,7 @@ func TestWalkFrom(t *testing.T, factory StoreFactory) {
 }
 
 func TestWalkFrom_StartingPointHasWrongPrefix(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	err := store.WalkFrom(ctx, "0000", "0001/0002", func(f string) error {
@@ -86,7 +86,7 @@ func TestWalkFrom_StartingPointHasWrongPrefix(t *testing.T, factory StoreFactory
 }
 
 func TestWalkFrom_WithPrefix(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	expected := []string{"0000/0001", "0000/0002", "0000/0003", "0001/0003"}
@@ -108,7 +108,7 @@ func TestWalkFrom_WithPrefix(t *testing.T, factory StoreFactory) {
 }
 
 func TestWalkFrom_SingleLetterStartingPoint(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	expected := []string{"a", "b", "c", "d"}
@@ -130,7 +130,7 @@ func TestWalkFrom_SingleLetterStartingPoint(t *testing.T, factory StoreFactory) 
 }
 
 func TestWalk_PathPrefix(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	expected := []string{"0000/0001", "0000/0002", "0000/0003"}
@@ -181,7 +181,7 @@ func TestListFiles(t *testing.T, factory StoreFactory) {
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			store, cleanup := factory()
+			store, _, cleanup := factory()
 			defer cleanup()
 
 			for _, file := range test.whenFiles {

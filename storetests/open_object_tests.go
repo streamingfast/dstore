@@ -12,7 +12,7 @@ var openObjectTests = []StoreTestFunc{
 }
 
 func TestOpenObject_ErrNotFound(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	rd, err := store.OpenObject(ctx, "anything_that_does_not_exist")
@@ -21,7 +21,7 @@ func TestOpenObject_ErrNotFound(t *testing.T, factory StoreFactory) {
 }
 
 func TestOpenObject_ReadSameFileMultipleTimes(t *testing.T, factory StoreFactory) {
-	store, cleanup := factory()
+	store, _, cleanup := factory()
 	defer cleanup()
 
 	addFileToStore(t, store, "file", "c1")

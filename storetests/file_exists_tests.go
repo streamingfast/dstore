@@ -41,7 +41,7 @@ func TestFileExists(t *testing.T, factory StoreFactory) {
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			store, cleanup := factory()
+			store, _, cleanup := factory()
 			defer cleanup()
 
 			for _, file := range test.whenFiles {

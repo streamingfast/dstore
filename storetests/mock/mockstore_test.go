@@ -12,8 +12,10 @@ func TestMockStore(t *testing.T) {
 }
 
 func createMockStoreFactory(t *testing.T, compression string) storetests.StoreFactory {
-	return func() (dstore.Store, storetests.StoreCleanup) {
-		return dstore.NewMockStore(nil), func() {
-		}
+	return func() (dstore.Store, storetests.StoreDescriptor, storetests.StoreCleanup) {
+		return dstore.NewMockStore(nil), storetests.StoreDescriptor{
+				Compression: compression,
+			}, func() {
+			}
 	}
 }
