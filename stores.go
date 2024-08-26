@@ -47,31 +47,32 @@ type Store interface {
 	BaseURL() *url.URL
 	SubStore(subFolder string) (Store, error)
 
+	// Deprecated: Use the Options to add callbacks to inject metering from the upstream code instead
 	SetMeter(meter Meter)
 }
 
 type Clonable interface {
-	Clone(context.Context) (Store, error)
+	Clone(ctx context.Context, opts ...Option) (Store, error)
 }
 
 var StopIteration = errors.New("stop iteration")
 
-func NewDBinStore(baseURL string) (Store, error) {
-	return NewStore(baseURL, "dbin.zst", "zstd", false)
+func NewDBinStore(baseURL string, opts ...Option) (Store, error) {
+	return NewStore(baseURL, "dbin.zst", "zstd", false, opts...)
 }
 
-func NewJSONLStore(baseURL string) (Store, error) {
+func NewJSONLStore(baseURL string, opts ...Option) (Store, error) {
 	// Replaces NewSimpleArchiveStore() from before
-	return NewStore(baseURL, "jsonl.gz", "gzip", false)
+	return NewStore(baseURL, "jsonl.gz", "gzip", false, opts...)
 }
 
-func NewSimpleStore(baseURL string) (Store, error) {
+func NewSimpleStore(baseURL string, opts ...Option) (Store, error) {
 	// Replaces NewSimpleGStore, and supports local store.
-	return NewStore(baseURL, "", "", true)
+	return NewStore(baseURL, "", "", true, opts...)
 }
 
 // NewStore creates a new Store instance. The baseURL is always a directory, and does not end with a `/`.
-func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store, error) {
+func NewStore(baseURL, extension, compressionType string, overwrite bool, opts ...Option) (Store, error) {
 	if strings.HasSuffix(baseURL, "/") {
 		return nil, fmt.Errorf("baseURL shouldn't end with a /")
 	}
@@ -83,19 +84,28 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 		return nil, err
 	}
 
+	config := config{}
+	for _, opt := range opts {
+		opt.apply(&config)
+	}
+
+	if config.compression != "" {
+		compressionType = config.compression
+	}
+
 	// file://superbob
 	switch base.Scheme {
 	case "gs":
-		return NewGSStore(base, extension, compressionType, overwrite)
+		return NewGSStore(base, extension, compressionType, overwrite, opts...)
 	case "az":
-		return NewAzureStore(base, extension, compressionType, overwrite)
+		return NewAzureStore(base, extension, compressionType, overwrite, opts...)
 	case "s3":
-		return NewS3Store(base, extension, compressionType, overwrite)
+		return NewS3Store(base, extension, compressionType, overwrite, opts...)
 	case "file":
-		return NewLocalStore(base, extension, compressionType, overwrite)
+		return NewLocalStore(base, extension, compressionType, overwrite, opts...)
 	case "":
 		// If scheme is empty, let's assume baseURL was a absolute/relative path without being an actual URL
-		return NewLocalStore(base, extension, compressionType, overwrite)
+		return NewLocalStore(base, extension, compressionType, overwrite, opts...)
 	}
 
 	return nil, fmt.Errorf("archive store only supports, file://, gs:// or local path")
@@ -104,6 +114,11 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool) (Store
 type config struct {
 	compression string
 	overwrite   bool
+
+	compressedWriteCallback   func(ctx context.Context, size int)
+	compressedReadCallback    func(ctx context.Context, size int)
+	uncompressedWriteCallback func(ctx context.Context, size int)
+	uncompressedReadCallback  func(ctx context.Context, size int)
 }
 
 type Option interface {
@@ -134,6 +149,38 @@ func Compression(compressionType string) Option {
 func AllowOverwrite() Option {
 	return optionFunc(func(config *config) {
 		config.overwrite = true
+	})
+}
+
+// WithCompressedReadCallback allows you to set a callback function that is invoked
+// when a compressed read operation is performed.
+func WithCompressedReadCallback(cb func(context.Context, int)) Option {
+	return optionFunc(func(config *config) {
+		config.compressedReadCallback = cb
+	})
+}
+
+// WithUncompressedReadCallback allows you to set a callback function that is invoked
+// when an uncompressed read operation is performed.
+func WithUncompressedReadCallback(cb func(context.Context, int)) Option {
+	return optionFunc(func(config *config) {
+		config.uncompressedReadCallback = cb
+	})
+}
+
+// WithCompressedWriteCallback allows you to set a callback function that is invoked
+// when a compressed write operation is performed.
+func WithCompressedWriteCallback(cb func(context.Context, int)) Option {
+	return optionFunc(func(config *config) {
+		config.compressedWriteCallback = cb
+	})
+}
+
+// WithUncompressedWriteCallback allows you to set a callback function that is invoked
+// when an uncompressed write operation is performed.
+func WithUncompressedWriteCallback(cb func(context.Context, int)) Option {
+	return optionFunc(func(config *config) {
+		config.uncompressedWriteCallback = cb
 	})
 }
 
@@ -168,7 +215,7 @@ func NewStoreFromFileURL(fileURL string, opts ...Option) (store Store, filename 
 		opt.apply(&config)
 	}
 
-	store, err = NewStore(storeURL, "", config.compression, config.overwrite)
+	store, err = NewStore(storeURL, "", config.compression, config.overwrite, opts...)
 	if err != nil {
 		return nil, filename, fmt.Errorf("open store: %w", err)
 	}

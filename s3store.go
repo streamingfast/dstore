@@ -65,18 +65,30 @@ type S3Store struct {
 	*commonStore
 }
 
-func (s *S3Store) Clone(ctx context.Context) (Store, error) {
-	return NewS3Store(s.baseURL, s.extension, s.compressionType, s.overwrite)
+func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*S3Store, error) {
+	ctx := context.Background()
+	return newS3StoreContext(ctx, baseURL, extension, compressionType, overwrite, opts...)
 }
 
-func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite bool) (*S3Store, error) {
+func newS3StoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*S3Store, error) {
+	conf := config{}
+	for _, opt := range opts {
+		opt.apply(&conf)
+	}
+
+	common := &commonStore{
+		compressionType:           compressionType,
+		extension:                 extension,
+		overwrite:                 overwrite,
+		uncompressedReadCallback:  conf.uncompressedReadCallback,
+		compressedReadCallback:    conf.compressedReadCallback,
+		uncompressedWriteCallback: conf.uncompressedWriteCallback,
+		compressedWriteCallback:   conf.compressedWriteCallback,
+	}
+
 	s := &S3Store{
-		baseURL: baseURL,
-		commonStore: &commonStore{
-			compressionType: compressionType,
-			extension:       extension,
-			overwrite:       overwrite,
-		},
+		baseURL:     baseURL,
+		commonStore: common,
 	}
 
 	awsConfig, bucket, path, err := ParseS3URL(baseURL)
@@ -95,6 +107,10 @@ func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite b
 	s.path = path
 
 	return s, nil
+}
+
+func (s *S3Store) Clone(ctx context.Context, opts ...Option) (Store, error) {
+	return newS3StoreContext(ctx, s.baseURL, s.extension, s.compressionType, s.overwrite, opts...)
 }
 
 func (s *S3Store) SubStore(subFolder string) (Store, error) {
@@ -187,8 +203,8 @@ func (s *S3Store) ObjectURL(name string) string {
 }
 
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
-	ctx = withFile(ctx, base)
-	ctx = withStore(ctx, "s3store")
+	ctx = withFileName(ctx, base)
+	ctx = withStoreType(ctx, "s3store")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	objPath := s.ObjectPath(base)
@@ -292,11 +308,11 @@ func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 }
 
 func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withStore(ctx, "s3store")
+	ctx = withStoreType(ctx, "s3store")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
-	ctx = withFile(ctx, path)
+	ctx = withFileName(ctx, path)
 
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", path))

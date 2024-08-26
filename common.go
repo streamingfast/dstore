@@ -20,11 +20,10 @@ type commonStore struct {
 	compressionType string
 	overwrite       bool
 
-	meter Meter
-}
-
-func (c *commonStore) SetMeter(m Meter) {
-	c.meter = m
+	compressedWriteCallback   func(ctx context.Context, size int)
+	uncompressedWriteCallback func(ctx context.Context, size int)
+	compressedReadCallback    func(ctx context.Context, size int)
+	uncompressedReadCallback  func(ctx context.Context, size int)
 }
 
 func (c *commonStore) Overwrite() bool      { return c.overwrite }
@@ -92,33 +91,50 @@ func listFiles(ctx context.Context, store Store, prefix string, max int) (out []
 	return
 }
 
-func (c *commonStore) compressedCopy(ctx context.Context, w io.Writer, f io.Reader) error {
-	if c.meter != nil {
-		w = &meteredWriter{w: w, m: c.meter, ctx: ctx}
+func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer, source io.Reader) error {
+	// Wrap the writer with the uncompressed write callback if it exists
+	if c.compressedWriteCallback != nil {
+		destination = &callbackWriter{w: destination, callback: c.compressedWriteCallback, ctx: ctx}
 	}
 
+	var dest io.Writer
 	switch c.compressionType {
 	case "gzip":
-		gw := gzip.NewWriter(w)
-		if _, err := io.Copy(gw, f); err != nil {
+		gw := gzip.NewWriter(destination)
+		if c.uncompressedWriteCallback != nil {
+			dest = &callbackWriter{w: gw, callback: c.uncompressedWriteCallback, ctx: ctx}
+		} else {
+			dest = gw
+		}
+		if _, err := io.Copy(dest, source); err != nil {
 			return err
 		}
 		if err := gw.Close(); err != nil {
 			return err
 		}
 	case "zstd":
-		zstdEncoder, err := zstd.NewWriter(w)
+		zstdEncoder, err := zstd.NewWriter(destination)
 		if err != nil {
 			return err
 		}
-		if _, err := io.Copy(zstdEncoder, f); err != nil {
+		if c.uncompressedWriteCallback != nil {
+			dest = &callbackWriter{w: zstdEncoder, callback: c.uncompressedWriteCallback, ctx: ctx}
+		} else {
+			dest = zstdEncoder
+		}
+		if _, err := io.Copy(dest, source); err != nil {
 			return err
 		}
 		if err := zstdEncoder.Close(); err != nil {
 			return err
 		}
 	default:
-		if _, err := io.Copy(w, f); err != nil {
+		if c.uncompressedWriteCallback != nil {
+			dest = &callbackWriter{w: destination, callback: c.uncompressedWriteCallback, ctx: ctx}
+		} else {
+			dest = destination
+		}
+		if _, err := io.Copy(dest, source); err != nil {
 			return err
 		}
 	}
@@ -126,8 +142,8 @@ func (c *commonStore) compressedCopy(ctx context.Context, w io.Writer, f io.Read
 }
 
 func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadCloser) (out io.ReadCloser, err error) {
-	if c.meter != nil {
-		reader = &meteredReadCloser{rc: reader, m: c.meter, ctx: ctx}
+	if c.compressedReadCallback != nil {
+		reader = &callbackReadCloser{rc: reader, callback: c.compressedReadCallback, ctx: ctx}
 	}
 
 	switch c.compressionType {
@@ -137,16 +153,29 @@ func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadClos
 			return nil, fmt.Errorf("unable to create gzip reader: %w", err)
 		}
 
-		out = gzipReader
+		if c.uncompressedReadCallback != nil {
+			out = &callbackReadCloser{rc: gzipReader, callback: c.uncompressedReadCallback, ctx: ctx}
+		} else {
+			out = gzipReader
+		}
+
 	case "zstd":
 		zstdReader, err := zstd.NewReader(reader)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
 		}
 
-		out = zstdReader.IOReadCloser()
+		if c.uncompressedReadCallback != nil {
+			out = &callbackReadCloser{rc: zstdReader.IOReadCloser(), callback: c.uncompressedReadCallback, ctx: ctx}
+		} else {
+			out = zstdReader.IOReadCloser()
+		}
 	default:
-		out = reader
+		if c.uncompressedReadCallback != nil {
+			out = &callbackReadCloser{rc: reader, callback: c.uncompressedReadCallback, ctx: ctx}
+		} else {
+			out = reader
+		}
 	}
 
 	return out, nil

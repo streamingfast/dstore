@@ -31,7 +31,16 @@ type GSStore struct {
 	*commonStore
 }
 
-func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool) (*GSStore, error) {
+func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*GSStore, error) {
+	ctx := context.Background()
+	return newGSStoreContext(ctx, baseURL, extension, compressionType, overwrite, opts...)
+}
+
+func (s *GSStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
+	return newGSStoreContext(ctx, s.baseURL, s.extension, s.compressionType, s.overwrite, opts...)
+}
+
+func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*GSStore, error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, err
@@ -40,25 +49,27 @@ func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 
 	client.SetRetry(storage.WithBackoff(gax.Backoff{}))
 
+	conf := config{}
+	for _, opt := range opts {
+		opt.apply(&conf)
+	}
+
+	common := &commonStore{
+		compressionType:           compressionType,
+		extension:                 extension,
+		overwrite:                 overwrite,
+		uncompressedReadCallback:  conf.uncompressedReadCallback,
+		compressedReadCallback:    conf.compressedReadCallback,
+		uncompressedWriteCallback: conf.uncompressedWriteCallback,
+		compressedWriteCallback:   conf.compressedWriteCallback,
+	}
+
 	return &GSStore{
-		baseURL: baseURL,
-		client:  client,
-		commonStore: &commonStore{
-			compressionType: compressionType,
-			extension:       extension,
-			overwrite:       overwrite,
-		},
+		baseURL:     baseURL,
+		client:      client,
+		commonStore: common,
 		userProject: userProject,
 	}, nil
-}
-
-func NewGSStore(baseURL *url.URL, extension, compressionType string, overwrite bool) (*GSStore, error) {
-	ctx := context.Background()
-	return newGSStoreContext(ctx, baseURL, extension, compressionType, overwrite)
-}
-
-func (s *GSStore) Clone(ctx context.Context) (Store, error) {
-	return newGSStoreContext(ctx, s.baseURL, s.extension, s.compressionType, s.overwrite)
 }
 
 func (s *GSStore) SubStore(subFolder string) (Store, error) {
@@ -109,8 +120,8 @@ func (s *GSStore) CopyObject(ctx context.Context, src, dest string) error {
 }
 
 func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
-	ctx = withFile(ctx, base)
-	ctx = withStore(ctx, "gstore")
+	ctx = withFileName(ctx, base)
+	ctx = withStoreType(ctx, "gstore")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(base)
@@ -152,11 +163,11 @@ func silencePreconditionError(err error) error {
 }
 
 func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {
-	ctx = withStore(ctx, "gstore")
+	ctx = withStoreType(ctx, "gstore")
 	ctx = withLogger(ctx, zlog, tracer)
 
 	path := s.ObjectPath(name)
-	ctx = withFile(ctx, path)
+	ctx = withFileName(ctx, path)
 
 	if tracer.Enabled() {
 		zlog.Debug("opening dstore file", zap.String("path", path))
