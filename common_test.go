@@ -86,6 +86,62 @@ func TestSimpleCompressedReadCallback(t *testing.T) {
 	assert.Less(t, compressedReadBytes, 1024)
 }
 
+func TestReadCallbackWithMeter(t *testing.T) {
+	compressedReadBytes := 0
+
+	c := commonStore{
+		compressionType: "gzip",
+		compressedReadCallback: func(ctx context.Context, n int) {
+			compressedReadBytes += n
+		},
+	}
+
+	meter := &meterMock{}
+	c.SetMeter(meter)
+
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, err := zw.Write(bytes.Repeat([]byte("1"), 1024))
+	require.NoError(t, err)
+
+	err = zw.Close()
+	require.NoError(t, err)
+
+	f := io.NopCloser(&buf)
+
+	r, err := c.uncompressedReader(context.Background(), f)
+	require.NoError(t, err)
+
+	_, err = io.ReadAll(r)
+	require.NoError(t, err)
+
+	assert.Equal(t, compressedReadBytes, meter.BytesRead)
+}
+
+func TestWriteCallbackWithMeter(t *testing.T) {
+	uncompressedWriteCallback := 0
+
+	c := commonStore{
+		compressionType: "gzip",
+		uncompressedWriteCallback: func(ctx context.Context, n int) {
+			uncompressedWriteCallback += n
+		},
+	}
+
+	meter := &meterMock{}
+	c.SetMeter(meter)
+
+	fullsize := 1024
+
+	f := io.Reader(bytes.NewBuffer(bytes.Repeat([]byte("1"), fullsize)))
+	w := bytes.NewBuffer(nil)
+
+	err := c.compressedCopy(context.Background(), w, f)
+	require.NoError(t, err)
+
+	assert.Equal(t, uncompressedWriteCallback, meter.BytesWritten)
+}
+
 func TestSimpleUncompressedReadCallback(t *testing.T) {
 	uncompressedReadBytes := 0
 
