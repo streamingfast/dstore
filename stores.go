@@ -93,7 +93,6 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 		compressionType = config.compression
 	}
 
-	// file://superbob
 	switch base.Scheme {
 	case "gs":
 		return NewGSStore(base, extension, compressionType, overwrite, opts...)
@@ -103,6 +102,8 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 		return NewS3Store(base, extension, compressionType, overwrite, opts...)
 	case "file":
 		return NewLocalStore(base, extension, compressionType, overwrite, opts...)
+	case "memory":
+		return NewMemoryStore(base, extension, compressionType, overwrite, opts...)
 	case "":
 		// If scheme is empty, let's assume baseURL was a absolute/relative path without being an actual URL
 		return NewLocalStore(base, extension, compressionType, overwrite, opts...)
