@@ -148,7 +148,7 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 
 		if err := f(s.toBaseName(infoPath)); err != nil {
 			if errors.Is(err, StopIteration) {
-				return nil
+				return filepath.SkipAll
 			}
 			return err
 		}
