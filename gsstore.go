@@ -244,10 +244,10 @@ func (s *GSStore) ListFiles(ctx context.Context, prefix string, max int) ([]stri
 }
 
 func (s *GSStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
-	return s.WalkFrom(ctx, prefix, "", f)
+	return s.WalkFromTo(ctx, prefix, "", "", f)
 }
 
-func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
 	q := &storage.Query{}
 
 	q.SetAttrSelection([]string{"Name"}) // only fetch the name, 25% faster
@@ -274,6 +274,15 @@ func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 		q.StartOffset = filepath.Join(q.Prefix, relativeStartingPoint)
 	}
 
+	if exclusiveEndPoint != "" {
+		if !strings.HasPrefix(exclusiveEndPoint, prefix) {
+			return fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
+		}
+		// same adjustment as above
+		relativeEndPoint := strings.TrimPrefix(exclusiveEndPoint, prefix)
+		q.EndOffset = filepath.Join(q.Prefix, relativeEndPoint)
+	}
+
 	if tracer.Enabled() {
 		zlog.Info("walking files from", zap.String("original_prefix", prefix), zap.String("prefix", q.Prefix), zap.String("start_offset", q.StartOffset))
 	}
@@ -296,4 +305,8 @@ func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 		}
 	}
 	return nil
+}
+
+func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return s.WalkFromTo(ctx, prefix, startingPoint, "", f)
 }

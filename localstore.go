@@ -102,6 +102,10 @@ func (s *LocalStore) WalkFrom(ctx context.Context, prefix, startingPoint string,
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
+func (s *LocalStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	return commonWalkFromTo(s, ctx, prefix, startingPoint, exclusiveEndPoint, f)
+}
+
 func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	fullPath := s.basePath + "/"
 	if prefix != "" {

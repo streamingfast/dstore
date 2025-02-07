@@ -369,6 +369,10 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 }
 
 func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	return s.WalkFromTo(ctx, prefix, startingPoint, "", f)
+}
+
+func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
 	targetPrefix := s.path
 	if targetPrefix != "" {
 		targetPrefix += "/"
@@ -405,6 +409,14 @@ func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 		}
 	}
 
+	var relativeEndPoint string
+	if exclusiveEndPoint != "" {
+		if !strings.HasPrefix(exclusiveEndPoint, prefix) {
+			return fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
+		}
+		relativeEndPoint = strings.TrimPrefix(exclusiveEndPoint, prefix)
+	}
+
 	if tracer.Enabled() {
 		zlog.Info("walking files from", zap.String("original_prefix", targetPrefix), zap.String("prefix", targetPrefix), zap.Stringp("start_after", q.StartAfter))
 	}
@@ -418,10 +430,11 @@ func (s *S3Store) WalkFrom(ctx context.Context, prefix, startingPoint string, f 
 				continue
 			}
 
-			if startingPoint != "" {
-				if filename < startingPoint {
-					continue
-				}
+			if startingPoint != "" && filename < startingPoint {
+				continue
+			}
+			if relativeEndPoint != "" && filename >= relativeEndPoint {
+				return false
 			}
 
 			if err := f(filename); err != nil {

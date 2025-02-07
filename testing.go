@@ -216,6 +216,9 @@ func (s *MockStore) SetOverwrite(in bool) {
 func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
+func (s *MockStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	return commonWalkFromTo(s, ctx, prefix, startingPoint, exclusiveEndPoint, f)
+}
 
 func (s *MockStore) Walk(ctx context.Context, prefix string, f func(filename string) error) error {
 	if s.WalkFunc != nil {

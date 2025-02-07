@@ -111,6 +111,10 @@ func (m *MemoryStore) WalkFrom(_ context.Context, prefix, startingPoint string, 
 	panic("not yet supported for this store type")
 }
 
+func (m *MemoryStore) WalkFromTo(_ context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	panic("not yet supported for this store type")
+}
+
 func (m *MemoryStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	panic("not yet supported for this store type")
 }

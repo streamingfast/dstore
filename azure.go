@@ -247,6 +247,10 @@ func (s *AzureStore) WalkFrom(ctx context.Context, prefix, startingPoint string,
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
 
+func (s *AzureStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	return commonWalkFromTo(s, ctx, prefix, startingPoint, exclusiveEndPoint, f)
+}
+
 func (s *AzureStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 
 	p := strings.TrimLeft(s.baseURL.Path, "/") + "/"

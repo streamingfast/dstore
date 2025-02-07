@@ -54,6 +54,30 @@ func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint stri
 	})
 }
 
+func commonWalkFromTo(store Store, ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	if startingPoint != "" && !strings.HasPrefix(startingPoint, prefix) {
+		return fmt.Errorf("starting point %q must start with prefix %q", startingPoint, prefix)
+	}
+	if exclusiveEndPoint != "" && !strings.HasPrefix(exclusiveEndPoint, prefix) {
+		return fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
+	}
+
+	var gatePassed bool
+	return store.Walk(ctx, prefix, func(filename string) error {
+		if exclusiveEndPoint != "" && filename >= exclusiveEndPoint {
+			return StopIteration
+		}
+		if gatePassed {
+			return f(filename)
+		}
+		if filename >= startingPoint {
+			gatePassed = true
+			return f(filename)
+		}
+		return nil
+	})
+}
+
 func pushLocalFile(ctx context.Context, store Store, localFile, toBaseName string) (removeFunc func() error, err error) {
 	f, err := os.Open(localFile)
 	if err != nil {

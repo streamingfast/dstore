@@ -16,6 +16,7 @@ var walkTests = []StoreTestFunc{
 	TestWalk_FilePrefix,
 	TestWalk_PathPrefix,
 	TestWalkFrom,
+	TestWalkFromTo,
 	TestWalkFrom_WithPrefix,
 	TestWalkFrom_SingleLetterStartingPoint,
 	TestWalkFrom_StartingPointHasWrongPrefix,
@@ -127,6 +128,29 @@ func TestWalkFrom_SingleLetterStartingPoint(t *testing.T, factory StoreFactory) 
 
 	require.NoError(t, err)
 	assert.EqualValues(t, expected[1:], seen)
+}
+
+func TestWalkFromTo(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	written := []string{"00000001", "00000002", "00000003", "00000004"}
+	for _, f := range written {
+		addFileToStore(t, store, f, f)
+	}
+	expected := []string{"00000002", "00000003"}
+
+	var seen []string
+	err := store.WalkFromTo(ctx, "", "00000002", "00000004", func(f string) error {
+		seen = append(seen, f)
+		exists, err := store.FileExists(ctx, f)
+		assert.NoError(t, err)
+		assert.True(t, exists)
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.EqualValues(t, expected, seen)
 }
 
 func TestWalk_PathPrefix(t *testing.T, factory StoreFactory) {
