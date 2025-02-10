@@ -36,8 +36,8 @@ type Store interface {
 	// returned by the `Walk` function. If your callback returns any error, iteration stops right away and
 	// callback returned error is return by the `Walk` function.
 	Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error
-	WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error
-	WalkFromTo(ctx context.Context, prefix, startingPoint, endpoint string, f func(filename string) (err error)) error
+	WalkFrom(ctx context.Context, prefix, inclusiveFrom string, f func(filename string) (err error)) error
+	WalkFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, f func(filename string) (err error)) error
 
 	ListFiles(ctx context.Context, prefix string, max int) ([]string, error)
 
