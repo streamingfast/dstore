@@ -26,6 +26,8 @@ type MockStore struct {
 	ObjectAttributesFunc func(ctx context.Context, base string) (*ObjectAttributes, error)
 	ListFilesFunc        func(ctx context.Context, prefix string, max int) ([]string, error)
 	WalkFunc             func(ctx context.Context, prefix string, f func(filename string) error) error
+	WalkFromFunc         func(ctx context.Context, prefix, startingPoint string, f func(filename string) error) error
+	WalkFromToFunc       func(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) error) error
 	PushLocalFileFunc    func(ctx context.Context, localFile string, toBaseName string) (err error)
 
 	Files           map[string][]byte
@@ -214,9 +216,16 @@ func (s *MockStore) SetOverwrite(in bool) {
 }
 
 func (s *MockStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
+	if s.WalkFromFunc != nil {
+		return s.WalkFromFunc(ctx, prefix, startingPoint, f)
+	}
 	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
 }
+
 func (s *MockStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	if s.WalkFromToFunc != nil {
+		return s.WalkFromToFunc(ctx, prefix, startingPoint, exclusiveEndPoint, f)
+	}
 	return commonWalkFromTo(s, ctx, prefix, startingPoint, exclusiveEndPoint, f)
 }
 
