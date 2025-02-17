@@ -64,6 +64,8 @@ func (s *MockStore) SubStore(subFolder string) (Store, error) {
 		FileExistsFunc:    s.FileExistsFunc,
 		ListFilesFunc:     s.ListFilesFunc,
 		WalkFunc:          s.WalkFunc,
+		WalkFromFunc:      s.WalkFromFunc,
+		WalkFromToFunc:    s.WalkFromToFunc,
 		PushLocalFileFunc: s.PushLocalFileFunc,
 	}, nil
 }
