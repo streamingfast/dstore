@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -200,6 +201,55 @@ func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 	}
 
 	return nil
+}
+
+func (s *AzureStore) Writer(ctx context.Context, base string) (io.WriteCloser, error) {
+	ctx = withFileName(ctx, base)
+	ctx = withStoreType(ctx, "azure")
+	ctx = withLogger(ctx, zlog, tracer)
+
+	path := s.ObjectPath(base)
+
+	exists, err := s.FileExists(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.overwrite && exists {
+		// We silently ignore when we ask not to overwrite
+		return newNopWriterCloser(), nil
+	}
+
+	pipeRead, pipeWrite := io.Pipe()
+
+	bufferSize := 1 * 1024 * 1024 // Size of the rotating buffers that are used when uploading
+	maxBuffers := 3               // Number of rotating buffers that are used when uploading
+	blobURL := s.containerURL.NewBlockBlobURL(path)
+	blobHeader := azblob.BlobHTTPHeaders{
+		ContentType:  "application/octet-stream",
+		CacheControl: "public, max-age=86400",
+	}
+
+	writeDone := make(chan error, 1)
+	go func() {
+		_, err = azblob.UploadStreamToBlockBlob(ctx, pipeRead, blobURL, azblob.UploadStreamToBlockBlobOptions{BlobHTTPHeaders: blobHeader,
+			BufferSize:       bufferSize,
+			MaxBuffers:       maxBuffers,
+			Metadata:         azblob.Metadata{},
+			AccessConditions: azblob.BlobAccessConditions{},
+		})
+		writeDone <- err
+	}()
+
+	return &wrappedWriteCloser{
+		writeFunc: pipeWrite.Write,
+		closeFunc: func() error {
+			err1 := pipeWrite.Close()
+			err2 := <-writeDone
+			return multierr.Combine(err1, err2)
+		},
+	}, nil
+
 }
 
 func (s *AzureStore) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {

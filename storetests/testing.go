@@ -26,6 +26,7 @@ func TestAll(t *testing.T, factory StoreFactory) {
 		openObjectTests,
 		walkTests,
 		writeObjectTests,
+		writerTests,
 	}
 
 	for _, testFuncs := range all {

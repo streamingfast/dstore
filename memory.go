@@ -38,6 +38,24 @@ func (m *MemoryStore) OpenObject(ctx context.Context, name string) (out io.ReadC
 	return
 }
 
+func (m *MemoryStore) Writer(ctx context.Context, base string) (io.WriteCloser, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, exists := m.data[base]; !m.overwrite && exists {
+		return newNopWriterCloser(), nil
+	}
+
+	w := bytes.NewBuffer(nil)
+	return &wrappedWriteCloser{
+		writeFunc: w.Write,
+		closeFunc: func() error {
+			return nil
+		},
+	}, nil
+
+}
+
 func (m *MemoryStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()

@@ -119,6 +119,36 @@ func (s *GSStore) CopyObject(ctx context.Context, src, dest string) error {
 	return err
 }
 
+func (s *GSStore) Writer(ctx context.Context, base string) (io.WriteCloser, error) {
+	ctx = withFileName(ctx, base)
+	ctx = withStoreType(ctx, "gstore")
+	ctx = withLogger(ctx, zlog, tracer)
+
+	path := s.ObjectPath(base)
+
+	object := s.bucket().Object(path)
+
+	if !s.overwrite {
+		object = object.If(storage.Conditions{DoesNotExist: true})
+	}
+	w := object.NewWriter(ctx)
+	w.ContentType = "application/octet-stream"
+	w.CacheControl = "public, max-age=86400"
+
+	return &wrappedWriteCloser{
+		writeFunc: w.Write,
+		closeFunc: func() error {
+			if err := w.Close(); err != nil {
+				if s.overwrite {
+					return err
+				}
+				return silencePreconditionError(err)
+			}
+			return nil
+		},
+	}, nil
+}
+
 func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
 	ctx = withFileName(ctx, base)
 	ctx = withStoreType(ctx, "gstore")
