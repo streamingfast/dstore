@@ -22,7 +22,6 @@ type Store interface {
 	ObjectURL(base string) string
 	ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error)
 
-	Writer(ctx context.Context, base string) (io.WriteCloser, error)
 	WriteObject(ctx context.Context, base string, f io.Reader) (err error)
 	PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error)
 

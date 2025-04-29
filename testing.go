@@ -20,7 +20,6 @@ import (
 type MockStore struct {
 	OpenObjectFunc       func(ctx context.Context, name string) (out io.ReadCloser, err error)
 	WriteObjectFunc      func(ctx context.Context, base string, f io.Reader) error
-	WriterFunc           func(ctx context.Context, base string) (io.WriteCloser, error)
 	CopyObjectFunc       func(ctx context.Context, src, dest string) error
 	DeleteObjectFunc     func(ctx context.Context, base string) error
 	FileExistsFunc       func(ctx context.Context, base string) (bool, error)
@@ -60,7 +59,6 @@ func (s *MockStore) SubStore(subFolder string) (Store, error) {
 		shouldOverwrite:   s.shouldOverwrite,
 		OpenObjectFunc:    s.OpenObjectFunc,
 		WriteObjectFunc:   s.WriteObjectFunc,
-		WriterFunc:        s.WriterFunc,
 		CopyObjectFunc:    s.CopyObjectFunc,
 		DeleteObjectFunc:  s.DeleteObjectFunc,
 		FileExistsFunc:    s.FileExistsFunc,
@@ -130,33 +128,6 @@ func (s *MockStore) CopyObject(ctx context.Context, src, dest string) error {
 	defer reader.Close()
 
 	return s.WriteObject(ctx, dest, reader)
-}
-
-func (s *MockStore) Writer(ctx context.Context, base string) (io.WriteCloser, error) {
-	if s.WriterFunc != nil {
-		return s.WriterFunc(ctx, base)
-	}
-	content, exists := s.Files[base]
-	if !exists {
-		zlog.Debug("writing object not found, creating new one", zap.String("name", base))
-	} else {
-		if !s.shouldOverwrite {
-			zlog.Debug("writing object not allowing overwrite", zap.String("name", base))
-			return newNopWriterCloser(), nil
-		}
-
-		zlog.Debug("writing object found, resetting it due to overwrite true", zap.String("name", base), zap.Int("content_length", len(content)))
-	}
-
-	buffer := bytes.NewBuffer(nil)
-	return &wrappedWriteCloser{
-		writeFunc: buffer.Write,
-		closeFunc: func() error {
-			s.Files[base] = buffer.Bytes()
-			return nil
-		},
-	}, nil
-
 }
 
 func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {

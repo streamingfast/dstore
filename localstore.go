@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
 
@@ -157,50 +156,6 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 		return nil
 	})
 	return err
-}
-
-func (s *LocalStore) Writer(ctx context.Context, base string) (io.WriteCloser, error) {
-	ctx = withFileName(ctx, base)
-	ctx = withStoreType(ctx, "localstore")
-	ctx = withLogger(ctx, zlog, tracer)
-
-	destPath := s.ObjectPath(base)
-
-	tempPath := destPath + "." + randomString(8) + ".tmp"
-
-	targetDir := filepath.Dir(tempPath)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return nil, fmt.Errorf("ensuring directory exists (mkdir -p) %q: %w", targetDir, err)
-	}
-
-	file, err := os.Create(tempPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create file %q: %w", tempPath, err)
-	}
-
-	r, w := io.Pipe()
-	errChan := make(chan error, 1)
-
-	go func() {
-		errChan <- s.compressedCopy(ctx, file, r)
-	}()
-
-	return &wrappedWriteCloser{
-		writeFunc: w.Write,
-		closeFunc: func() error {
-			err1 := w.Close()
-			err2 := <-errChan
-			if errs := multierr.Combine(err1, err2); errs != nil {
-				return errs
-			}
-
-			if err := os.Rename(tempPath, destPath); err != nil {
-				return fmt.Errorf("rename: %w", err)
-			}
-			return nil
-		},
-	}, nil
-
 }
 
 func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Reader) (err error) {

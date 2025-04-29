@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/klauspost/compress/zstd"
 )
@@ -225,32 +224,4 @@ func (wrc *wrappedReadCloser) Close() error {
 
 func (wrc *wrappedReadCloser) Read(p []byte) (n int, err error) {
 	return wrc.orig.Read(p)
-}
-
-type wrappedWriteCloser struct {
-	sync.Once
-	writeFunc func(p []byte) (n int, err error)
-	closeFunc func() error
-}
-
-func (w *wrappedWriteCloser) Write(p []byte) (n int, err error) {
-	return w.writeFunc(p)
-}
-
-func (w *wrappedWriteCloser) Close() (err error) {
-	w.Do(func() {
-		err = w.closeFunc()
-	})
-	return
-}
-
-func newNopWriterCloser() io.WriteCloser {
-	return &wrappedWriteCloser{
-		writeFunc: func(p []byte) (n int, err error) {
-			return len(p), nil
-		},
-		closeFunc: func() error {
-			return nil
-		},
-	}
 }

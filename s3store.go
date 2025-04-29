@@ -22,7 +22,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
 
@@ -261,45 +260,6 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	wg.Wait()
 
 	return nil
-}
-
-func (s *S3Store) Writer(ctx context.Context, base string) (io.WriteCloser, error) {
-	ctx = withFileName(ctx, base)
-	ctx = withStoreType(ctx, "s3store")
-	ctx = withLogger(ctx, zlog, tracer)
-
-	objPath := s.ObjectPath(base)
-
-	exists, err := s.FileExists(ctx, base)
-	if err != nil {
-		return nil, err
-	}
-
-	if !s.overwrite && exists {
-		// We silently ignore when we ask not to overwrite
-		return newNopWriterCloser(), nil
-	}
-
-	pr, pw := io.Pipe()
-	writeDone := make(chan error, 1)
-
-	go func() {
-		_, err = s.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-			Bucket: aws.String(s.bucket),
-			Key:    &objPath,
-			Body:   pr,
-		})
-		writeDone <- err
-	}()
-
-	return &wrappedWriteCloser{
-		writeFunc: pw.Write,
-		closeFunc: func() error {
-			err1 := pw.Close()
-			err2 := <-writeDone
-			return multierr.Combine(err1, err2)
-		},
-	}, nil
 }
 
 func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
