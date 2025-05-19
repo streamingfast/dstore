@@ -56,11 +56,12 @@ func init() {
 type S3Store struct {
 	baseURL *url.URL
 
-	bucket   string
-	path     string
-	service  *s3.S3
-	uploader *s3manager.Uploader
-	context  context.Context
+	bucket       string
+	path         string
+	storageClass string
+	service      *s3.S3
+	uploader     *s3manager.Uploader
+	context      context.Context
 
 	*commonStore
 }
@@ -91,7 +92,7 @@ func newS3StoreContext(_ context.Context, baseURL *url.URL, extension, compressi
 		commonStore: common,
 	}
 
-	awsConfig, bucket, path, err := ParseS3URL(baseURL)
+	awsConfig, bucket, path, storageClass, err := ParseS3URL(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid s3 url: %w", err)
 	}
@@ -105,6 +106,7 @@ func newS3StoreContext(_ context.Context, baseURL *url.URL, extension, compressi
 	s.uploader = s3manager.NewUploader(sess)
 	s.bucket = bucket
 	s.path = path
+	s.storageClass = storageClass
 
 	return s, nil
 }
@@ -121,19 +123,20 @@ func (s *S3Store) SubStore(subFolder string) (Store, error) {
 	url.Path = path.Join(url.Path, subFolder)
 	newPath := path.Join(s.path, subFolder)
 	return &S3Store{
-		baseURL:     url,
-		commonStore: s.commonStore,
-		service:     s.service,
-		uploader:    s.uploader,
-		bucket:      s.bucket,
-		path:        newPath,
+		baseURL:      url,
+		commonStore:  s.commonStore,
+		service:      s.service,
+		uploader:     s.uploader,
+		bucket:       s.bucket,
+		storageClass: s.storageClass,
+		path:         newPath,
 	}, nil
 }
 
-func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket string, path string, err error) {
+func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket, path, storageClass string, err error) {
 	region := s3URL.Query().Get("region")
 	if region == "" {
-		return nil, "", "", fmt.Errorf("specify s3 bucket like: s3://bucket/path?region=us-east-1")
+		return nil, "", "", "", fmt.Errorf("specify s3 bucket like: s3://bucket/path?region=us-east-1")
 	}
 
 	awsConfig := &aws.Config{
@@ -165,7 +168,7 @@ func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket string, path string,
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
 	}
 
-	return awsConfig, bucket, strings.Trim(path, "/"), nil
+	return awsConfig, bucket, strings.Trim(path, "/"), s3URL.Query().Get("storageClass"), nil
 }
 
 func hasCustomEndpoint(s3URL *url.URL) bool {
@@ -238,11 +241,16 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 		}
 	}(ctx)
 
-	_, err = s.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+	uploadInput := &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
 		Key:    &objPath,
 		Body:   pr,
-	})
+	}
+	if s.storageClass != "" {
+		uploadInput.StorageClass = aws.String(s.storageClass)
+	}
+
+	_, err = s.uploader.UploadWithContext(ctx, uploadInput)
 	if err != nil {
 		select {
 		case err2 := <-writeDone:

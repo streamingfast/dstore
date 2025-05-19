@@ -144,7 +144,7 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 			storeURL.Path = fullPath + testPath
 		}
 
-		awsConfig, bucket, path, err := dstore.ParseS3URL(storeURL)
+		awsConfig, bucket, path, _, err := dstore.ParseS3URL(storeURL)
 		require.NoError(t, err)
 
 		zlog.Debug("creating a new s3store for test",
