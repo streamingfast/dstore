@@ -14,21 +14,23 @@ func TestNewS3Store(t *testing.T) {
 	defaultEndpoint := "https://s3.test.amazonaws.com"
 
 	tests := []struct {
-		url              string
-		expectedEndpoint string
-		expectedBucket   string
-		expectedPath     string
-		expectedRegion   string
-		expectedErr      error
+		url                  string
+		expectedEndpoint     string
+		expectedBucket       string
+		expectedPath         string
+		expectedRegion       string
+		expectedStorageClass string
+		expectedErr          error
 	}{
 		{url: "s3://bucket?region=test", expectedEndpoint: defaultEndpoint, expectedBucket: "bucket", expectedRegion: "test"},
 		{url: "s3://bucket/path1?region=test", expectedEndpoint: defaultEndpoint, expectedBucket: "bucket", expectedPath: "path1", expectedRegion: "test"},
-		{"s3://bucket/path1/path2?region=test", defaultEndpoint, "bucket", "path1/path2", "test", nil},
+		{"s3://bucket/path1/path2?region=test", defaultEndpoint, "bucket", "path1/path2", "test", "", nil},
 
 		{url: "s3://test.com/bucket?region=test", expectedEndpoint: "https://test.com", expectedBucket: "bucket", expectedRegion: "test"},
 		{url: "s3://test.com/bucket/path1/?region=test", expectedEndpoint: "https://test.com", expectedBucket: "bucket", expectedPath: "path1", expectedRegion: "test"},
 		{url: "s3://test.com/bucket/path1/path2?region=test", expectedEndpoint: "https://test.com", expectedBucket: "bucket", expectedPath: "path1/path2", expectedRegion: "test"},
 		{url: "s3://test.com/bucket/path1/path2?region=test&insecure=true", expectedEndpoint: "http://test.com", expectedBucket: "bucket", expectedPath: "path1/path2", expectedRegion: "test"},
+		{url: "s3://test.com/bucket/path1/path2?region=test&insecure=true&storageClass=cold", expectedEndpoint: "http://test.com", expectedBucket: "bucket", expectedPath: "path1/path2", expectedRegion: "test", expectedStorageClass: "cold"},
 
 		{url: "s3://localhost:9000/store-tests/dstore-s3store-tests-63acbe181e32c21e?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin", expectedEndpoint: "http://localhost:9000", expectedBucket: "store-tests", expectedPath: "dstore-s3store-tests-63acbe181e32c21e", expectedRegion: "none"},
 		{url: "s3://localhost:9000/store-tests?region=none&insecure=true", expectedEndpoint: "http://localhost:9000", expectedBucket: "store-tests", expectedRegion: "none"},
@@ -49,6 +51,7 @@ func TestNewS3Store(t *testing.T) {
 
 				assert.Equal(t, test.expectedBucket, store.bucket, "bucket not equals")
 				assert.Equal(t, test.expectedPath, store.path, "path not equals")
+				assert.Equal(t, test.expectedStorageClass, store.storageClass, "storage class not equals")
 			} else {
 				assert.Equal(t, test.expectedErr, err)
 			}
