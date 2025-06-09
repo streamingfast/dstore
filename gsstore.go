@@ -247,11 +247,10 @@ func (s *GSStore) Walk(ctx context.Context, prefix string, f func(filename strin
 	return s.WalkFromTo(ctx, prefix, "", "", f)
 }
 
-func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+func getGSWalkQuery(prefix, startingPoint, exclusiveEndPoint, baseURLPath string) (*storage.Query, error) {
 	q := &storage.Query{}
-
 	q.SetAttrSelection([]string{"Name"}) // only fetch the name, 25% faster
-	q.Prefix = strings.TrimLeft(s.baseURL.Path, "/") + "/"
+	q.Prefix = strings.TrimLeft(baseURLPath+"/", "/")
 	if prefix != "" {
 		q.Prefix = filepath.Join(q.Prefix, prefix)
 		// join cleans the string and will remove the trailing / in the prefix if present.
@@ -263,7 +262,7 @@ func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 
 	if startingPoint != "" {
 		if !strings.HasPrefix(startingPoint, prefix) {
-			return fmt.Errorf("starting point %q must start with prefix %q", startingPoint, prefix)
+			return nil, fmt.Errorf("starting point %q must start with prefix %q", startingPoint, prefix)
 		}
 
 		// "startingPoint" is known to start with "prefix" (checked when entering function), but our the prefix received do
@@ -271,23 +270,31 @@ func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 		// "original prefix" from the "startingPoint" and append it to the real "final" prefix instead.
 		relativeStartingPoint := strings.TrimPrefix(startingPoint, prefix)
 
-		q.StartOffset = filepath.Join(q.Prefix, relativeStartingPoint)
+		q.StartOffset = q.Prefix + relativeStartingPoint
 	}
 
 	if exclusiveEndPoint != "" {
 		if !strings.HasPrefix(exclusiveEndPoint, prefix) {
-			return fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
+			return nil, fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
 		}
 		// same adjustment as above
 		relativeEndPoint := strings.TrimPrefix(exclusiveEndPoint, prefix)
 		q.EndOffset = filepath.Join(q.Prefix, relativeEndPoint)
 	}
+	return q, nil
 
-	if tracer.Enabled() {
-		zlog.Info("walking files from", zap.String("original_prefix", prefix), zap.String("prefix", q.Prefix), zap.String("start_offset", q.StartOffset))
+}
+
+func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
+	q, err := getGSWalkQuery(prefix, startingPoint, exclusiveEndPoint, s.baseURL.Path)
+	if err != nil {
+		return err
 	}
 
 	it := s.bucket().Objects(ctx, q)
+	if tracer.Enabled() {
+		zlog.Info("walking files from", zap.String("original_prefix", prefix), zap.String("prefix", q.Prefix), zap.String("start_offset", q.StartOffset))
+	}
 
 	for {
 		attrs, err := it.Next()
