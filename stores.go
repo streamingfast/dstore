@@ -110,7 +110,7 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 		return NewLocalStore(base, extension, compressionType, overwrite, opts...)
 	}
 
-	return nil, fmt.Errorf("archive store only supports, file://, gs:// or local path")
+	return nil, fmt.Errorf("store URL must begin with file:// (or local path without a scheme), gs://, az://, s3:// or memory://, received scheme %q", base.Scheme)
 }
 
 type config struct {
