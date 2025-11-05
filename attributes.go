@@ -3,6 +3,9 @@ package dstore
 import "time"
 
 type ObjectAttributes struct {
+	// Metadata is a map of metadata key-value pairs.
+	Metadata map[string]string
+
 	// Size is the size of the object in bytes.
 	Size int64
 

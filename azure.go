@@ -147,7 +147,23 @@ func (s *AzureStore) ObjectAttributes(ctx context.Context, base string) (*Object
 	return &ObjectAttributes{
 		LastModified: props.LastModified(),
 		Size:         props.ContentLength(),
+		Metadata:     props.NewMetadata(),
 	}, nil
+}
+
+func (s *AzureStore) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
+	path := s.ObjectPath(base)
+
+	// Convert metadata to Azure format
+	azureMetadata := make(azblob.Metadata)
+	for k, v := range metadata {
+		azureMetadata[k] = v
+	}
+
+	// Update blob metadata
+	blobURL := s.containerURL.NewBlockBlobURL(path)
+	_, err := blobURL.SetMetadata(ctx, azureMetadata, azblob.BlobAccessConditions{}, azblob.ClientProvidedKeyOptions{})
+	return err
 }
 
 func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {

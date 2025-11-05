@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Added
 
+* Added `SetMetadata` to interface, which you can now get back from ObjectAttributes.
+
 * Added `storageClass` query parameter for the s3 store to define a storage class on upload.
 
 * Added Clonable interface so you can call `dstore.Clone(ctx)` on a remote store, instantiate a new network client and context.

@@ -20,6 +20,7 @@ type MemoryStore struct {
 	baseURL *url.URL
 
 	data     map[string][]byte
+	metadata map[string]map[string]string
 	modified map[string]time.Time
 
 	lock sync.RWMutex
@@ -81,10 +82,33 @@ func (m *MemoryStore) ObjectAttributes(_ context.Context, base string) (*ObjectA
 		return &ObjectAttributes{
 			LastModified: m.modified[base],
 			Size:         int64(len(m.data[base])),
+			Metadata:     m.metadata[base],
 		}, nil
 	}
 
 	return nil, ErrNotFound
+}
+
+func (m *MemoryStore) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, exists := m.data[base]; !exists {
+		return ErrNotFound
+	}
+
+	if m.metadata == nil {
+		m.metadata = make(map[string]map[string]string)
+	}
+
+	// Create a copy of the metadata to avoid external modifications
+	metadataCopy := make(map[string]string)
+	for k, v := range metadata {
+		metadataCopy[k] = v
+	}
+
+	m.metadata[base] = metadataCopy
+	return nil
 }
 
 func (m *MemoryStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error) {

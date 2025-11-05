@@ -283,7 +283,14 @@ func (s *LocalStore) ObjectAttributes(ctx context.Context, base string) (*Object
 	return &ObjectAttributes{
 		LastModified: info.ModTime(),
 		Size:         info.Size(),
+		Metadata:     nil, // unsupported
 	}, nil
+}
+
+var ErrMetadataNotSupported = errors.New("metadata is not supported by local file system store")
+
+func (s *LocalStore) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
+	return ErrMetadataNotSupported
 }
 
 func (s *LocalStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {

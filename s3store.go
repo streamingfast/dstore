@@ -297,6 +297,17 @@ func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 
 	return true, nil
 }
+func convertMap(m map[string]*string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range m {
+		if v == nil {
+			result[k] = ""
+			continue
+		}
+		result[k] = *v
+	}
+	return result
+}
 
 func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
 	path := s.ObjectPath(base)
@@ -312,7 +323,30 @@ func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 	return &ObjectAttributes{
 		LastModified: *output.LastModified,
 		Size:         *output.ContentLength,
+		Metadata:     convertMap(output.Metadata),
 	}, nil
+}
+
+func (s *S3Store) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
+	path := s.ObjectPath(base)
+
+	// Convert metadata to AWS format
+	awsMetadata := make(map[string]*string)
+	for k, v := range metadata {
+		awsMetadata[k] = aws.String(v)
+	}
+
+	// Use CopyObject to update metadata (copy to itself with new metadata)
+	copySource := fmt.Sprintf("%s/%s", s.bucket, path)
+	_, err := s.service.CopyObjectWithContext(ctx, &s3.CopyObjectInput{
+		Bucket:            aws.String(s.bucket),
+		Key:               &path,
+		CopySource:        aws.String(copySource),
+		Metadata:          awsMetadata,
+		MetadataDirective: aws.String("REPLACE"),
+	})
+
+	return err
 }
 
 func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadCloser, err error) {

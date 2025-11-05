@@ -21,6 +21,7 @@ type Store interface {
 	ObjectPath(base string) string
 	ObjectURL(base string) string
 	ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error)
+	SetMetadata(ctx context.Context, base string, metadata map[string]string) error
 
 	WriteObject(ctx context.Context, base string, f io.Reader) (err error)
 	PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error)

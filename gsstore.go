@@ -228,7 +228,19 @@ func (s *GSStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 	return &ObjectAttributes{
 		LastModified: attrs.Updated,
 		Size:         attrs.Size,
+		Metadata:     attrs.Metadata,
 	}, nil
+}
+
+func (s *GSStore) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
+	path := s.ObjectPath(base)
+	objectHandle := s.bucket().Object(path)
+	attrs := storage.ObjectAttrsToUpdate{
+		Metadata: metadata,
+	}
+
+	_, err := objectHandle.Update(ctx, attrs)
+	return err
 }
 
 func (s *GSStore) PushLocalFile(ctx context.Context, localFile, toBaseName string) error {
