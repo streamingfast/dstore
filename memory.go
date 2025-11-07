@@ -39,9 +39,14 @@ func (m *MemoryStore) OpenObject(ctx context.Context, name string) (out io.ReadC
 	return
 }
 
-func (m *MemoryStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (m *MemoryStore) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	// Parse metadataKeyValues array
+	if len(metadataKeyValues)%2 != 0 {
+		return fmt.Errorf("metadataKeyValues must have an even number of strings (key-value pairs), got %d", len(metadataKeyValues))
+	}
 
 	if _, exists := m.data[base]; !m.overwrite && exists {
 		return nil
@@ -54,6 +59,20 @@ func (m *MemoryStore) WriteObject(ctx context.Context, base string, f io.Reader)
 
 	m.data[base] = w.Bytes()
 	m.modified[base] = time.Now()
+
+	// Set metadata if provided
+	if len(metadataKeyValues) > 0 {
+		if m.metadata == nil {
+			m.metadata = make(map[string]map[string]string)
+		}
+		metadata := make(map[string]string)
+		for i := 0; i < len(metadataKeyValues); i += 2 {
+			key := metadataKeyValues[i]
+			value := metadataKeyValues[i+1]
+			metadata[key] = value
+		}
+		m.metadata[base] = metadata
+	}
 
 	return nil
 }

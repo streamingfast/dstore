@@ -19,7 +19,7 @@ import (
 
 type MockStore struct {
 	OpenObjectFunc       func(ctx context.Context, name string) (out io.ReadCloser, err error)
-	WriteObjectFunc      func(ctx context.Context, base string, f io.Reader) error
+	WriteObjectFunc      func(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) error
 	CopyObjectFunc       func(ctx context.Context, src, dest string) error
 	DeleteObjectFunc     func(ctx context.Context, base string) error
 	FileExistsFunc       func(ctx context.Context, base string) (bool, error)
@@ -42,7 +42,7 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 		Metadata: make(map[string]map[string]string),
 	}
 	if writeFunc != nil {
-		store.WriteObjectFunc = func(ctx context.Context, base string, f io.Reader) error {
+		store.WriteObjectFunc = func(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) error {
 			return writeFunc(base, f)
 		}
 	}
@@ -137,9 +137,14 @@ func (s *MockStore) CopyObject(ctx context.Context, src, dest string) error {
 	return s.WriteObject(ctx, dest, reader)
 }
 
-func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
 	if s.WriteObjectFunc != nil {
-		return s.WriteObjectFunc(ctx, base, f)
+		return s.WriteObjectFunc(ctx, base, f, metadataKeyValues...)
+	}
+
+	// Parse metadataKeyValues array
+	if len(metadataKeyValues)%2 != 0 {
+		return fmt.Errorf("metadataKeyValues must have an even number of strings (key-value pairs), got %d", len(metadataKeyValues))
 	}
 
 	zlog.Debug("writing object", zap.String("name", base))
@@ -162,6 +167,17 @@ func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader) (
 	}
 
 	s.Files[base] = buffer.Bytes()
+
+	// Set metadata if provided
+	if len(metadataKeyValues) > 0 {
+		metadata := make(map[string]string)
+		for i := 0; i < len(metadataKeyValues); i += 2 {
+			key := metadataKeyValues[i]
+			value := metadataKeyValues[i+1]
+			metadata[key] = value
+		}
+		s.Metadata[base] = metadata
+	}
 
 	zlog.Debug("wrote object", zap.String("name", base), zap.Int("content_length", len(s.Files[base])))
 	return nil

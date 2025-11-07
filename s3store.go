@@ -205,10 +205,15 @@ func (s *S3Store) ObjectURL(name string) string {
 	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
 }
 
-func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
 	ctx = withFileName(ctx, base)
 	ctx = withStoreType(ctx, "s3store")
 	ctx = withLogger(ctx, zlog, tracer)
+
+	// Parse metadataKeyValues array
+	if len(metadataKeyValues)%2 != 0 {
+		return fmt.Errorf("metadataKeyValues must have an even number of strings (key-value pairs), got %d", len(metadataKeyValues))
+	}
 
 	objPath := s.ObjectPath(base)
 
@@ -248,6 +253,17 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	}
 	if s.storageClass != "" {
 		uploadInput.StorageClass = aws.String(s.storageClass)
+	}
+
+	// Add metadata if provided
+	if len(metadataKeyValues) > 0 {
+		metadata := make(map[string]*string)
+		for i := 0; i < len(metadataKeyValues); i += 2 {
+			key := metadataKeyValues[i]
+			value := metadataKeyValues[i+1]
+			metadata[key] = aws.String(value)
+		}
+		uploadInput.Metadata = metadata
 	}
 
 	_, err = s.uploader.UploadWithContext(ctx, uploadInput)

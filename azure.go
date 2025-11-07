@@ -166,10 +166,15 @@ func (s *AzureStore) SetMetadata(ctx context.Context, base string, metadata map[
 	return err
 }
 
-func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
 	ctx = withFileName(ctx, base)
 	ctx = withStoreType(ctx, "azure")
 	ctx = withLogger(ctx, zlog, tracer)
+
+	// Parse metadataKeyValues array
+	if len(metadataKeyValues)%2 != 0 {
+		return fmt.Errorf("metadataKeyValues must have an even number of strings (key-value pairs), got %d", len(metadataKeyValues))
+	}
 
 	path := s.ObjectPath(base)
 
@@ -205,10 +210,20 @@ func (s *AzureStore) WriteObject(ctx context.Context, base string, f io.Reader) 
 		CacheControl: "public, max-age=86400",
 	}
 
+	// Add metadata if provided
+	metadata := azblob.Metadata{}
+	if len(metadataKeyValues) > 0 {
+		for i := 0; i < len(metadataKeyValues); i += 2 {
+			key := metadataKeyValues[i]
+			value := metadataKeyValues[i+1]
+			metadata[key] = value
+		}
+	}
+
 	_, err = azblob.UploadStreamToBlockBlob(ctx, pipeRead, blobURL, azblob.UploadStreamToBlockBlobOptions{BlobHTTPHeaders: blobHeader,
 		BufferSize:       bufferSize,
 		MaxBuffers:       maxBuffers,
-		Metadata:         azblob.Metadata{},
+		Metadata:         metadata,
 		AccessConditions: azblob.BlobAccessConditions{},
 	})
 	if err != nil {

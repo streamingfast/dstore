@@ -158,7 +158,12 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 	return err
 }
 
-func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Reader) (err error) {
+func (s *LocalStore) WriteObject(ctx context.Context, base string, reader io.Reader, metadataKeyValues ...string) (err error) {
+	// Validate metadataKeyValues format even though we ignore the metadata
+	if len(metadataKeyValues)%2 != 0 {
+		return fmt.Errorf("metadataKeyValues must have an even number of strings (key-value pairs), got %d", len(metadataKeyValues))
+	}
+	// Local store doesn't support metadata, so we ignore metadataKeyValues without failing
 	ctx = withFileName(ctx, base)
 	ctx = withStoreType(ctx, "localstore")
 	ctx = withLogger(ctx, zlog, tracer)

@@ -119,7 +119,7 @@ func (s *GSStore) CopyObject(ctx context.Context, src, dest string) error {
 	return err
 }
 
-func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (err error) {
+func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
 	ctx = withFileName(ctx, base)
 	ctx = withStoreType(ctx, "gstore")
 	ctx = withLogger(ctx, zlog, tracer)
@@ -134,6 +134,21 @@ func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader) (er
 	w := object.NewWriter(ctx)
 	w.ContentType = "application/octet-stream"
 	w.CacheControl = "public, max-age=86400"
+
+	// Parse metadataKeyValues array
+	if len(metadataKeyValues)%2 != 0 {
+		return fmt.Errorf("metadataKeyValues must have an even number of strings (key-value pairs), got %d", len(metadataKeyValues))
+	}
+
+	if len(metadataKeyValues) > 0 {
+		metadata := make(map[string]string)
+		for i := 0; i < len(metadataKeyValues); i += 2 {
+			key := metadataKeyValues[i]
+			value := metadataKeyValues[i+1]
+			metadata[key] = value
+		}
+		w.Metadata = metadata
+	}
 
 	if err := s.compressedCopy(ctx, w, f); err != nil {
 		return err

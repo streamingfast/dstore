@@ -23,7 +23,7 @@ type Store interface {
 	ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error)
 	SetMetadata(ctx context.Context, base string, metadata map[string]string) error
 
-	WriteObject(ctx context.Context, base string, f io.Reader) (err error)
+	WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error)
 	PushLocalFile(ctx context.Context, localFile, toBaseName string) (err error)
 
 	CopyObject(ctx context.Context, src, dest string) error
