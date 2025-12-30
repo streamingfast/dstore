@@ -16,12 +16,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.uber.org/zap"
 )
 
@@ -50,7 +50,6 @@ func init() {
 		zap.Int("read_attempts", s3ReadAttempts),
 		zap.Duration("retry_push_local_files_delay", retryS3PushLocalFilesDelay),
 	)
-
 }
 
 type S3Store struct {
@@ -59,8 +58,9 @@ type S3Store struct {
 	bucket       string
 	path         string
 	storageClass string
-	service      *s3.S3
-	uploader     *s3manager.Uploader
+	client       *s3.Client
+	uploader     *manager.Uploader
+	downloader   *manager.Downloader
 	context      context.Context
 
 	*commonStore
@@ -71,7 +71,7 @@ func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite b
 	return newS3StoreContext(ctx, baseURL, extension, compressionType, overwrite, opts...)
 }
 
-func newS3StoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*S3Store, error) {
+func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*S3Store, error) {
 	conf := config{}
 	for _, opt := range opts {
 		opt.apply(&conf)
@@ -90,6 +90,7 @@ func newS3StoreContext(_ context.Context, baseURL *url.URL, extension, compressi
 	s := &S3Store{
 		baseURL:     baseURL,
 		commonStore: common,
+		context:     ctx,
 	}
 
 	awsConfig, bucket, path, storageClass, err := ParseS3URL(baseURL)
@@ -97,13 +98,14 @@ func newS3StoreContext(_ context.Context, baseURL *url.URL, extension, compressi
 		return nil, fmt.Errorf("invalid s3 url: %w", err)
 	}
 
-	sess, err := session.NewSession(awsConfig)
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsConfig...)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching AWS session info from env: %w", err)
+		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
 
-	s.service = s3.New(sess)
-	s.uploader = s3manager.NewUploader(sess)
+	s.client = s3.NewFromConfig(cfg)
+	s.uploader = manager.NewUploader(s.client)
+	s.downloader = manager.NewDownloader(s.client)
 	s.bucket = bucket
 	s.path = path
 	s.storageClass = storageClass
@@ -125,36 +127,42 @@ func (s *S3Store) SubStore(subFolder string) (Store, error) {
 	return &S3Store{
 		baseURL:      url,
 		commonStore:  s.commonStore,
-		service:      s.service,
+		client:       s.client,
 		uploader:     s.uploader,
+		downloader:   s.downloader,
 		bucket:       s.bucket,
 		storageClass: s.storageClass,
 		path:         newPath,
 	}, nil
 }
 
-func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket, path, storageClass string, err error) {
+func ParseS3URL(s3URL *url.URL) (configOptions []func(*awsconfig.LoadOptions) error, bucket, path, storageClass string, err error) {
 	region := s3URL.Query().Get("region")
 	if region == "" {
 		return nil, "", "", "", fmt.Errorf("specify s3 bucket like: s3://bucket/path?region=us-east-1")
 	}
 
-	awsConfig := &aws.Config{
-		Region: &region,
-	}
+	configOptions = append(configOptions, awsconfig.WithRegion(region))
 
 	hasEndpoint := hasCustomEndpoint(s3URL)
 	if hasEndpoint {
-		awsConfig.Endpoint = aws.String(s3URL.Host)
-		awsConfig.S3ForcePathStyle = aws.Bool(true)
-
+		endpoint := s3URL.Host
 		if s3URL.Query().Get("insecure") != "" {
-			awsConfig.Endpoint = aws.String("http://" + *awsConfig.Endpoint)
-			awsConfig.DisableSSL = aws.Bool(true)
+			endpoint = "http://" + endpoint
+		} else {
+			endpoint = "https://" + endpoint
 		}
 
-		pathParts := strings.Split(strings.TrimLeft(s3URL.Path, "/"), "/")
+		configOptions = append(configOptions, awsconfig.WithEndpointResolverWithOptions(
+			aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					URL:               endpoint,
+					HostnameImmutable: true,
+				}, nil
+			}),
+		))
 
+		pathParts := strings.Split(strings.TrimLeft(s3URL.Path, "/"), "/")
 		bucket = pathParts[0]
 		path = strings.Replace(s3URL.Path, bucket, "", 1)
 	} else {
@@ -165,10 +173,12 @@ func ParseS3URL(s3URL *url.URL) (config *aws.Config, bucket, path, storageClass 
 	accessKeyID := s3URL.Query().Get("access_key_id")
 	secretAccessKey := s3URL.Query().Get("secret_access_key")
 	if accessKeyID != "" && secretAccessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+		configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""),
+		))
 	}
 
-	return awsConfig, bucket, strings.Trim(path, "/"), s3URL.Query().Get("storageClass"), nil
+	return configOptions, bucket, strings.Trim(path, "/"), s3URL.Query().Get("storageClass"), nil
 }
 
 func hasCustomEndpoint(s3URL *url.URL) bool {
@@ -246,27 +256,28 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, met
 		}
 	}(ctx)
 
-	uploadInput := &s3manager.UploadInput{
+	uploadInput := &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
-		Key:    &objPath,
+		Key:    aws.String(objPath),
 		Body:   pr,
 	}
+
 	if s.storageClass != "" {
-		uploadInput.StorageClass = aws.String(s.storageClass)
+		uploadInput.StorageClass = types.StorageClass(s.storageClass)
 	}
 
 	// Add metadata if provided
 	if len(metadataKeyValues) > 0 {
-		metadata := make(map[string]*string)
+		metadata := make(map[string]string)
 		for i := 0; i < len(metadataKeyValues); i += 2 {
 			key := metadataKeyValues[i]
 			value := metadataKeyValues[i+1]
-			metadata[key] = aws.String(value)
+			metadata[key] = value
 		}
 		uploadInput.Metadata = metadata
 	}
 
-	_, err = s.uploader.UploadWithContext(ctx, uploadInput)
+	_, err = s.uploader.Upload(ctx, uploadInput)
 	if err != nil {
 		select {
 		case err2 := <-writeDone:
@@ -296,41 +307,32 @@ func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
 
 	return s.WriteObject(ctx, dest, reader)
 }
+
 func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
 	path := s.ObjectPath(base)
 
-	_, err := s.service.HeadObject(&s3.HeadObjectInput{
+	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
-		Key:    &path,
+		Key:    aws.String(path),
 	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
+		var notFound *types.NotFound
+		var noSuchKey *types.NoSuchKey
+		if errors.As(err, &notFound) || errors.As(err, &noSuchKey) {
 			return false, nil
 		}
-
 		return false, err
 	}
 
 	return true, nil
 }
-func convertMap(m map[string]*string) map[string]string {
-	result := make(map[string]string)
-	for k, v := range m {
-		if v == nil {
-			result[k] = ""
-			continue
-		}
-		result[k] = *v
-	}
-	return result
-}
 
 func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAttributes, error) {
 	path := s.ObjectPath(base)
 
-	output, err := s.service.HeadObject(&s3.HeadObjectInput{
+	output, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
-		Key:    &path,
+		Key:    aws.String(path),
 	})
 	if err != nil {
 		return nil, err
@@ -339,27 +341,21 @@ func (s *S3Store) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 	return &ObjectAttributes{
 		LastModified: *output.LastModified,
 		Size:         *output.ContentLength,
-		Metadata:     convertMap(output.Metadata),
+		Metadata:     output.Metadata,
 	}, nil
 }
 
 func (s *S3Store) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
 	path := s.ObjectPath(base)
 
-	// Convert metadata to AWS format
-	awsMetadata := make(map[string]*string)
-	for k, v := range metadata {
-		awsMetadata[k] = aws.String(v)
-	}
-
 	// Use CopyObject to update metadata (copy to itself with new metadata)
 	copySource := fmt.Sprintf("%s/%s", s.bucket, path)
-	_, err := s.service.CopyObjectWithContext(ctx, &s3.CopyObjectInput{
+	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:            aws.String(s.bucket),
-		Key:               &path,
+		Key:               aws.String(path),
 		CopySource:        aws.String(copySource),
-		Metadata:          awsMetadata,
-		MetadataDirective: aws.String("REPLACE"),
+		Metadata:          metadata,
+		MetadataDirective: types.MetadataDirectiveReplace,
 	})
 
 	return err
@@ -388,18 +384,17 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 			time.Sleep(500 * time.Millisecond)
 		}
 		var reader *s3.GetObjectOutput
-		reader, err = s.service.GetObjectWithContext(ctx, &s3.GetObjectInput{
+		reader, err = s.client.GetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(s.bucket),
-			Key:    &path,
+			Key:    aws.String(path),
 		})
 		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				switch aerr.Code() {
-				case s3.ErrCodeNoSuchBucket:
-					err = fmt.Errorf("s3 bucket %s does not exist", s.bucket)
-				case s3.ErrCodeNoSuchKey:
-					err = ErrNotFound
-				}
+			var noSuchBucket *types.NoSuchBucket
+			var noSuchKey *types.NoSuchKey
+			if errors.As(err, &noSuchBucket) {
+				err = fmt.Errorf("s3 bucket %s does not exist", s.bucket)
+			} else if errors.As(err, &noSuchKey) {
+				err = ErrNotFound
 			}
 			continue
 		}
@@ -442,9 +437,9 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 		}
 	}
 
-	q := &s3.ListObjectsV2Input{
+	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
-		Prefix: &targetPrefix,
+		Prefix: aws.String(targetPrefix),
 	}
 
 	if startingPoint != "" {
@@ -463,7 +458,7 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 			startAfter := targetPrefix + rightBeforeStartingPoint
 
 			// StartAfter is also known as 'marker' within S3 compatible layer
-			q.StartAfter = &startAfter
+			input.StartAfter = aws.String(startAfter)
 		}
 	}
 
@@ -476,15 +471,21 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 	}
 
 	if tracer.Enabled() {
-		zlog.Info("walking files from", zap.String("original_prefix", targetPrefix), zap.String("prefix", targetPrefix), zap.Stringp("start_after", q.StartAfter))
+		zlog.Info("walking files from", zap.String("original_prefix", targetPrefix), zap.String("prefix", targetPrefix), zap.Stringp("start_after", input.StartAfter))
 	}
 
-	var innerErr error
-	err := s.service.ListObjectsV2PagesWithContext(ctx, q, func(page *s3.ListObjectsV2Output, _ bool) bool {
-		for _, el := range page.Contents {
-			filename := s.toBaseName(*el.Key)
+	paginator := s3.NewListObjectsV2Paginator(s.client, input)
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("listing objects: %w", err)
+		}
+
+		for _, obj := range page.Contents {
+			filename := s.toBaseName(*obj.Key)
 			if filename == "" {
-				zlog.Debug("got an empty filename from s3 store, ignoring it", zap.String("key", *el.Key))
+				zlog.Debug("got an empty filename from s3 store, ignoring it", zap.String("key", *obj.Key))
 				continue
 			}
 
@@ -492,25 +493,16 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 				continue
 			}
 			if relativeEndPoint != "" && filename >= relativeEndPoint {
-				return false
+				return nil
 			}
 
 			if err := f(filename); err != nil {
 				if errors.Is(err, StopIteration) {
-					return false
+					return nil
 				}
-
-				innerErr = err
-				return false
+				return fmt.Errorf("processing object list: %w", err)
 			}
 		}
-		return true
-	})
-	if err != nil {
-		return fmt.Errorf("listing objects: %w", err)
-	}
-	if innerErr != nil {
-		return fmt.Errorf("processing object list: %w", innerErr)
 	}
 
 	return nil
@@ -526,12 +518,13 @@ func (s *S3Store) toBaseName(filename string) string {
 
 func (s *S3Store) DeleteObject(ctx context.Context, base string) error {
 	path := s.ObjectPath(base)
-	_, err := s.service.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
-		Key:    &path,
+		Key:    aws.String(path),
 	})
-	if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == s3.ErrCodeNoSuchKey {
+	if err != nil {
+		var noSuchKey *types.NoSuchKey
+		if errors.As(err, &noSuchKey) {
 			return ErrNotFound
 		}
 	}

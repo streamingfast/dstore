@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/streamingfast/dstore"
 	"github.com/streamingfast/dstore/storetests"
 	"github.com/streamingfast/logging"
@@ -144,7 +144,7 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 			storeURL.Path = fullPath + testPath
 		}
 
-		awsConfig, bucket, path, _, err := dstore.ParseS3URL(storeURL)
+		configOptions, bucket, path, _, err := dstore.ParseS3URL(storeURL)
 		require.NoError(t, err)
 
 		zlog.Debug("creating a new s3store for test",
@@ -156,24 +156,34 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 		store, err := dstore.NewS3Store(storeURL, "", compression, overwrite, opts...)
 		require.NoError(t, err)
 
-		sess, err := session.NewSession(awsConfig)
+		cfg, err := awsconfig.LoadDefaultConfig(ctx, configOptions...)
 		require.NoError(t, err)
 
-		client := s3.New(sess)
+		client := s3.NewFromConfig(cfg)
 
 		if emptyBucket {
 			prefix := strings.TrimLeft(path, "/") + "/"
-			query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
-			seenFile := ""
-			err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, _ bool) bool {
-				for _, el := range page.Contents {
-					seenFile = *el.Key
-				}
-				return false
-			})
-			if err != nil {
-				t.Fatalf("error returned: %s", err)
+			input := &s3.ListObjectsV2Input{
+				Bucket: aws.String(bucket),
+				Prefix: aws.String(prefix),
 			}
+			seenFile := ""
+			paginator := s3.NewListObjectsV2Paginator(client, input)
+
+			for paginator.HasMorePages() {
+				page, err := paginator.NextPage(ctx)
+				if err != nil {
+					t.Fatalf("error returned: %s", err)
+				}
+				for _, obj := range page.Contents {
+					seenFile = *obj.Key
+					break
+				}
+				if seenFile != "" {
+					break
+				}
+			}
+
 			if seenFile != "" {
 				t.Fatalf("requested empty bucket, but given s3 store URL bucket (%s) is not empty", baseURL)
 			}
@@ -187,29 +197,29 @@ func createS3StoreFactory(t *testing.T, baseURL string, compression string, over
 				}
 
 				prefix := strings.TrimLeft(path, "/") + "/"
-				query := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: &prefix}
+				input := &s3.ListObjectsV2Input{
+					Bucket: aws.String(bucket),
+					Prefix: aws.String(prefix),
+				}
 
 				if tracer.Enabled() {
 					zlog.Debug("cleaning out bucket", zap.String("bucket", bucket), zap.String("prefix", prefix))
 				}
 
-				var innerErr error
-				err := client.ListObjectsV2PagesWithContext(ctx, query, func(page *s3.ListObjectsV2Output, _ bool) bool {
-					for _, el := range page.Contents {
-						_, err := client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
-							Bucket: aws.String(bucket),
-							Key:    el.Key,
-						})
-						if err != nil {
-							innerErr = err
-							return false
-						}
-					}
-					return true
-				})
+				paginator := s3.NewListObjectsV2Paginator(client, input)
 
-				require.NoError(t, err)
-				require.NoError(t, innerErr)
+				for paginator.HasMorePages() {
+					page, err := paginator.NextPage(ctx)
+					require.NoError(t, err)
+
+					for _, obj := range page.Contents {
+						_, err := client.DeleteObject(ctx, &s3.DeleteObjectInput{
+							Bucket: aws.String(bucket),
+							Key:    obj.Key,
+						})
+						require.NoError(t, err)
+					}
+				}
 			}
 	}
 }
