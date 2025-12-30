@@ -2,7 +2,23 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [MAINTAINERS.md](./MAINTAINERS.md) for instructions to keep up to date.
 
-# Unreleased
+# v0.1.1
+
+## Added
+
+* Added support for "workload identity credentials" in Azure. Order of preference is:
+  - If `AZURE_STORAGE_KEY` is set, use shared key credential (previous behavior)
+	- Otherwise, use DefaultAzureCredential which supports:
+	  - Managed Identity (for Azure resources)
+	  - Service Principal (via AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
+	  - Azure CLI credentials
+	  - Visual Studio Code credentials
+
+## Changed
+
+* Legacy azure library changed from `github.com/Azure/azure-storage-blob-go` to `github.com/Azure/azure-sdk-for-go/sdk`
+
+# 2025-11-05
 
 ## Fixed
 

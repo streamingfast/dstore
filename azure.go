@@ -16,6 +16,7 @@ import (
 	"errors"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 )
@@ -43,20 +44,42 @@ func newAzureStoreContext(_ context.Context, baseURL *url.URL, extension, compre
 		return nil, fmt.Errorf("specify azure account name and container like: az://account.container/path")
 	}
 
-	accessKey := os.Getenv("AZURE_STORAGE_KEY")
-	if accessKey == "" {
-		return nil, fmt.Errorf("specify azure access storate key with env var: AZURE_STORAGE_KEY")
-	}
-
-	credential, err := azblob.NewSharedKeyCredential(accountName, accessKey)
-	if err != nil {
-		return nil, fmt.Errorf("azure authentication failed: %w", err)
-	}
-
 	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
-	client, err := azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create azure client: %w", err)
+
+	var client *azblob.Client
+
+	// Authentication priority:
+	// 1. If AZURE_STORAGE_KEY is set, use shared key credential
+	// 2. Otherwise, use DefaultAzureCredential which supports:
+	//    - Managed Identity (for Azure resources)
+	//    - Service Principal (via AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
+	//    - Azure CLI credentials
+	//    - Visual Studio Code credentials
+	//    - And other authentication methods
+	//
+	// Try to use shared key credential if AZURE_STORAGE_KEY is provided
+	accessKey := os.Getenv("AZURE_STORAGE_KEY")
+	if accessKey != "" {
+		credential, err := azblob.NewSharedKeyCredential(accountName, accessKey)
+		if err != nil {
+			return nil, fmt.Errorf("azure shared key authentication failed: %w", err)
+		}
+
+		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create azure client with shared key: %w", err)
+		}
+	} else {
+		// Fall back to DefaultAzureCredential (supports managed identity, service principal, etc.)
+		credential, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("azure default credential failed: %w", err)
+		}
+
+		client, err = azblob.NewClient(serviceURL, credential, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create azure client with default credential: %w", err)
+		}
 	}
 
 	conf := config{}

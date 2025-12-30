@@ -20,14 +20,12 @@ import (
 
 var zlog, tracer = logging.PackageLogger("dstore", "github.com/streamingfast/dstore/storetests/azure")
 
-// For dfusers, one can use:
-//
-//	STORETESTS_AZ_STORE_URL=az://streamingfasttest01.myblobs/test
+// For dfusers, one can use: `export STORETESTS_AZ_STORE_URL=az://streamingfasttest01.myblobs`
 var azStoreBaseURL = os.Getenv("STORETESTS_AZ_STORE_URL")
 
 func TestAZStore(t *testing.T) {
 	if azStoreBaseURL == "" {
-		t.Skip("You must provide a valid Azure Bucket via STORETESTS_AZ_STORE_URL environment variable to execute those tests, ex: az://myaccount.myblobstore/path")
+		t.Skip("You must provide a valid Azure Bucket via STORETESTS_AZ_STORE_URL environment variable to execute those tests, ex: az://streamingfasttest01.myblobs")
 		return
 	}
 
@@ -36,7 +34,7 @@ func TestAZStore(t *testing.T) {
 
 func TestAZStore_Overwrite(t *testing.T) {
 	if azStoreBaseURL == "" {
-		t.Skip("You must provide a valid Azure Bucket via STORETESTS_AZ_STORE_URL environment variable to execute those tests, ex: az://myaccount.myblobstore/path")
+		t.Skip("You must provide a valid Azure Bucket via STORETESTS_AZ_STORE_URL environment variable to execute those tests, ex: az://streamingfasttest01.myblobs")
 		return
 	}
 
@@ -74,7 +72,7 @@ func TestAZStore_CompressionAndMetering(t *testing.T) {
 	}
 
 	if azStoreBaseURL == "" {
-		t.Skip("You must provide a valid Azure Bucket via STORETESTS_AZ_STORE_URL environment variable to execute those tests, ex: az://myaccount.myblobstore/path")
+		t.Skip("You must provide a valid Azure Bucket via STORETESTS_AZ_STORE_URL environment variable to execute those tests, ex: az://streamingfasttest01.myblobs")
 		return
 	}
 

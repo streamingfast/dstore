@@ -2,7 +2,6 @@ package storetests
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +48,6 @@ func TestFileExists(t *testing.T, factory StoreFactory) {
 				addFileToStore(t, store, file.id, file.content)
 			}
 
-			fmt.Println("url", store.BaseURL())
 			exists, err := store.FileExists(context.Background(), test.searchFor)
 			if test.expectedErr != nil {
 				require.Equal(t, test.expectedErr, err)

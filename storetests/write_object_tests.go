@@ -24,7 +24,7 @@ func TestWriteObject_Basic(t *testing.T, factory StoreFactory) {
 	assert.NoError(t, err)
 
 	rd, err := store.OpenObject(ctx, "temp.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, content, readObjectAndClose(t, rd))
 }
