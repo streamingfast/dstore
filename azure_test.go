@@ -71,10 +71,11 @@ func Test_decodeAzureScheme(t *testing.T) {
 }
 
 func TestAzureStoreWriteObject(t *testing.T) {
-	t.Skip("needs azure access to test this")
-	os.Setenv("AZURE_STORAGE_KEY", "")
+	if os.Getenv("AZURE_STORAGE_KEY") == "" {
+		t.Skip("AZURE_STORAGE_KEY not set")
+	}
 
-	base, _ := url.Parse("az://dfusesandbox.demo/test")
+	base, _ := url.Parse("az://streamingfasttest01.myblobs/test")
 	s, err := NewAzureStore(base, "", "", false)
 	require.NoError(t, err)
 
