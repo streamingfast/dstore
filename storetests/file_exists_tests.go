@@ -53,6 +53,7 @@ func TestFileExists(t *testing.T, factory StoreFactory) {
 				require.Equal(t, test.expectedErr, err)
 			} else {
 				assert.Equal(t, test.shouldBeFound, exists)
+				assert.Nil(t, err)
 			}
 		})
 	}

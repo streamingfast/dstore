@@ -189,7 +189,7 @@ func (s *GSStore) OpenObject(ctx context.Context, name string) (out io.ReadClose
 	}
 	reader, err := s.bucket().Object(path).NewReader(ctx)
 	if err != nil {
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, ErrNotFound
 		}
 
@@ -219,7 +219,7 @@ func (s *GSStore) FileExists(ctx context.Context, base string) (bool, error) {
 
 	_, err := s.bucket().Object(path).Attrs(ctx)
 	if err != nil {
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return false, nil
 		}
 
@@ -233,7 +233,7 @@ func (s *GSStore) ObjectAttributes(ctx context.Context, base string) (*ObjectAtt
 
 	attrs, err := s.bucket().Object(path).Attrs(ctx)
 	if err != nil {
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, ErrNotFound
 		}
 
