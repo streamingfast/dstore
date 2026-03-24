@@ -43,6 +43,15 @@ var s3StoreBaseURL = os.Getenv("STORETESTS_S3_STORE_URL")
 //	STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
 var s3MinioStoreBaseURL = os.Getenv("STORETESTS_S3_MINIO_STORE_URL")
 
+// You can start a local Ceph RGW cluster via docker compose (see docker/ceph-local):
+//
+//	docker compose up -d ceph
+//
+// And then use:
+//
+//	STORETESTS_S3_CEPH_STORE_URL="s3://localhost:8080/store-tests?region=none&insecure=true&access_key_id=cephaccesskey&secret_access_key=cephsecretkey"
+var s3CephStoreBaseURL = os.Getenv("STORETESTS_S3_CEPH_STORE_URL")
+
 func TestS3Store(t *testing.T) {
 	if s3StoreBaseURL == "" {
 		t.Skip("You must provide a valid S3 URL via STORETESTS_S3_STORE_URL environment variable to execute those tests")
@@ -115,6 +124,72 @@ func TestS3Store_Minio_CompressionAndMetering(t *testing.T) {
 	}
 
 	storetests.TestAll(t, createS3StoreFactory(t, s3MinioStoreBaseURL, "zstd", false, false, opts...))
+
+	require.Equal(t, "compressedRead", compressedRead)
+	require.Equal(t, "uncompressedRead", uncompressedRead)
+	require.Equal(t, "compressedWrite", compressedWrite)
+	require.Equal(t, "uncompressedWrite", uncompressedWrite)
+
+	require.True(t, compressedReadByteCount > 0, "compressed read byte count should be greater than 0")
+	require.True(t, compressedWriteByteCount > 0, "compressed write byte count should be greater than 0")
+	require.True(t, uncompressedReadByteCount > 0, "uncompressed read byte count should be greater than 0")
+	require.True(t, uncompressedWriteByteCount > 0, "uncompressed write byte count should be greater than 0")
+}
+
+func TestS3Store_Ceph(t *testing.T) {
+	if s3CephStoreBaseURL == "" {
+		t.Skip("You must provide a valid Ceph RGW S3 URL via STORETESTS_S3_CEPH_STORE_URL environment variable to execute those tests")
+		return
+	}
+
+	storetests.TestAll(t, createS3StoreFactory(t, s3CephStoreBaseURL, "", false, false))
+}
+
+func TestS3Store_Ceph_EmptyBucket_FilePrefix(t *testing.T) {
+	if s3CephStoreBaseURL == "" {
+		t.Skip("You must provide a valid Ceph RGW S3 URL via STORETESTS_S3_CEPH_STORE_URL environment variable to execute those tests")
+		return
+	}
+
+	storetests.TestWalk_FilePrefix(t, createS3StoreFactory(t, s3CephStoreBaseURL, "", false, true))
+}
+
+func TestS3Store_Ceph_CompressionAndMetering(t *testing.T) {
+	if s3CephStoreBaseURL == "" {
+		t.Skip("You must provide a valid Ceph RGW S3 URL via STORETESTS_S3_CEPH_STORE_URL environment variable to execute those tests")
+		return
+	}
+
+	compressedReadByteCount := 0
+	compressedWriteByteCount := 0
+	uncompressedReadByteCount := 0
+	uncompressedWriteByteCount := 0
+
+	var uncompressedRead string
+	var compressedRead string
+	var compressedWrite string
+	var uncompressedWrite string
+
+	opts := []dstore.Option{
+		dstore.WithCompressedReadCallback(func(ctx context.Context, i int) {
+			compressedReadByteCount += i
+			compressedRead = "compressedRead"
+		}),
+		dstore.WithUncompressedReadCallback(func(ctx context.Context, i int) {
+			uncompressedReadByteCount += i
+			uncompressedRead = "uncompressedRead"
+		}),
+		dstore.WithCompressedWriteCallback(func(ctx context.Context, i int) {
+			compressedWriteByteCount += i
+			compressedWrite = "compressedWrite"
+		}),
+		dstore.WithUncompressedWriteCallback(func(ctx context.Context, i int) {
+			uncompressedWriteByteCount += i
+			uncompressedWrite = "uncompressedWrite"
+		}),
+	}
+
+	storetests.TestAll(t, createS3StoreFactory(t, s3CephStoreBaseURL, "zstd", false, false, opts...))
 
 	require.Equal(t, "compressedRead", compressedRead)
 	require.Equal(t, "uncompressedRead", uncompressedRead)

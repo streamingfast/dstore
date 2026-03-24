@@ -1,0 +1,62 @@
+# Services for running backend integration tests locally.
+#
+# Start with:
+#   docker compose up -d
+#
+# MinIO (S3-compatible):
+#   STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
+#
+# Ceph RGW (S3-compatible):
+#   STORETESTS_S3_MINIO_STORE_URL="s3://localhost:8080/store-tests?region=none&insecure=true&access_key_id=cephaccesskey&secret_access_key=cephsecretkey"
+
+services:
+  # ── MinIO ────────────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console (http://localhost:9001)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio-createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin &&
+        /usr/bin/mc mb --ignore-existing myminio/store-tests &&
+        echo 'MinIO bucket ready'
+      "
+
+  # ── Ceph (RGW / S3-compatible) ───────────────────────────────────────────────
+  #
+  # Custom image built from quay.io/ceph/ceph:v19 (native arm64 + amd64).
+  # Bootstraps a minimal single-node cluster: mon + 1 OSD + mgr + RGW.
+  # OSD uses a 1 GB file-backed BlueStore volume (no real block device needed).
+  # Startup takes ~60-90 s on first run; healthcheck waits for the RGW endpoint.
+  ceph:
+    build: ./docker/ceph-local
+    ports:
+      - "8080:8080"   # RGW / S3 endpoint
+    environment:
+      CEPH_DEMO_UID: cephtest
+      CEPH_DEMO_ACCESS_KEY: cephaccesskey
+      CEPH_DEMO_SECRET_KEY: cephsecretkey
+      CEPH_DEMO_BUCKET: store-tests
+      RGW_PORT: "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
