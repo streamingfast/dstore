@@ -1,3 +1,7 @@
+.claude
 .envrc
 .idea
+.sbox
 *~
+/build
+/dist

@@ -1,0 +1,4 @@
+global:
+  binary: dstore
+  language: golang
+  variant: library
