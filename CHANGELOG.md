@@ -2,7 +2,7 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [MAINTAINERS.md](./MAINTAINERS.md) for instructions to keep up to date.
 
-## Unreleased
+## v0.2.0
 
 ### Added
 
@@ -10,8 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * Added S3 integration tests for Ceph RGW (`TestS3Store_Ceph`, `TestS3Store_Ceph_EmptyBucket_FilePrefix`, `TestS3Store_Ceph_CompressionAndMetering`)
 * Added GCS integration tests for fake-gcs-server emulator (`TestGSStore_Emulator`, `TestGSStore_Emulator_Overwrite`, `TestGSStore_Emulator_CompressionAndMetering`)
 
+### Added
+
+* S3 store: configurable HTTP connection pool via `DSTORE_S3_MAX_IDLE_CONNS`, `DSTORE_S3_MAX_IDLE_CONNS_PER_HOST`, `DSTORE_S3_IDLE_CONN_TIMEOUT` env vars
+
 ### Fixed
 
+* S3 store: fixed goroutine leak caused by connection pool exhaustion on single-host S3 stores (e.g. MinIO); HTTP body is now explicitly drained and closed, and the transport is configured with `MaxIdleConnsPerHost=100` by default
 * GCS store now uses the JSON API for object reads when `STORAGE_EMULATOR_HOST` is set, fixing compatibility with fake-gcs-server (which does not handle the XML API with percent-encoded path slashes)
 
 # v0.1.2
