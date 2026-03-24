@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -25,9 +26,41 @@ import (
 	"go.uber.org/zap"
 )
 
+type drainingReadCloser struct {
+	rc io.ReadCloser
+}
+
+func (d *drainingReadCloser) Read(p []byte) (int, error) {
+	return d.rc.Read(p)
+}
+
+func (d *drainingReadCloser) Close() error {
+	io.Copy(io.Discard, d.rc)
+	return d.rc.Close()
+}
+
+type s3ReadCloser struct {
+	outer    io.ReadCloser
+	httpBody io.ReadCloser
+}
+
+func (s *s3ReadCloser) Read(p []byte) (int, error) {
+	return s.outer.Read(p)
+}
+
+func (s *s3ReadCloser) Close() error {
+	err := s.outer.Close()
+	io.Copy(io.Discard, s.httpBody)
+	s.httpBody.Close()
+	return err
+}
+
 var retryS3PushLocalFilesDelay time.Duration
 var s3ReadAttempts = 1
 var bufferedS3Read bool
+var s3MaxIdleConns = 500
+var s3MaxIdleConnsPerHost = 100
+var s3IdleConnTimeout = 90 * time.Second
 
 func init() {
 	retry := os.Getenv("DSTORE_S3_RETRY_PUSH_DELAY")
@@ -45,10 +78,30 @@ func init() {
 			s3ReadAttempts = int(attempts)
 		}
 	}
+
+	if v := os.Getenv("DSTORE_S3_MAX_IDLE_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			s3MaxIdleConns = n
+		}
+	}
+	if v := os.Getenv("DSTORE_S3_MAX_IDLE_CONNS_PER_HOST"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			s3MaxIdleConnsPerHost = n
+		}
+	}
+	if v := os.Getenv("DSTORE_S3_IDLE_CONN_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			s3IdleConnTimeout = d
+		}
+	}
+
 	zlog.Info("S3 storage configured",
 		zap.Bool("buffered_read", bufferedS3Read),
 		zap.Int("read_attempts", s3ReadAttempts),
 		zap.Duration("retry_push_local_files_delay", retryS3PushLocalFilesDelay),
+		zap.Int("max_idle_conns", s3MaxIdleConns),
+		zap.Int("max_idle_conns_per_host", s3MaxIdleConnsPerHost),
+		zap.Duration("idle_conn_timeout", s3IdleConnTimeout),
 	)
 }
 
@@ -97,6 +150,19 @@ func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 	if err != nil {
 		return nil, fmt.Errorf("invalid s3 url: %w", err)
 	}
+
+	awsConfig = append(awsConfig, awsconfig.WithHTTPClient(&http.Client{
+		Transport: &http.Transport{
+			ForceAttemptHTTP2:   true,
+			MaxIdleConns:        s3MaxIdleConns,
+			MaxIdleConnsPerHost: s3MaxIdleConnsPerHost,
+			IdleConnTimeout:     s3IdleConnTimeout,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+		},
+	}))
 
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsConfig...)
 	if err != nil {
@@ -400,16 +466,20 @@ func (s *S3Store) OpenObject(ctx context.Context, name string) (out io.ReadClose
 		}
 		if bufferedS3Read {
 			var data []byte
-			data, err = ioutil.ReadAll(reader.Body)
+			data, err = io.ReadAll(reader.Body)
 			if err != nil {
 				continue
 			}
 			if err = reader.Body.Close(); err != nil {
 				continue
 			}
-			out, err = s.uncompressedReader(ctx, ioutil.NopCloser(bytes.NewReader(data)))
+			out, err = s.uncompressedReader(ctx, io.NopCloser(bytes.NewReader(data)))
 		} else {
-			out, err = s.uncompressedReader(ctx, reader.Body)
+			httpBody := reader.Body
+			out, err = s.uncompressedReader(ctx, httpBody)
+			if err == nil {
+				out = &s3ReadCloser{outer: out, httpBody: httpBody}
+			}
 		}
 		if tracer.Enabled() {
 			out = wrapReadCloser(out, func() {

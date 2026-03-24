@@ -1,7 +1,9 @@
 package dstore
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"testing"
@@ -90,4 +92,36 @@ func TestParseS3URL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDrainingReadCloser_FullyReadThenClose(t *testing.T) {
+	data := []byte("hello world")
+	rc := &drainingReadCloser{rc: io.NopCloser(bytes.NewReader(data))}
+
+	out, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	assert.Equal(t, data, out)
+	require.NoError(t, rc.Close())
+}
+
+func TestDrainingReadCloser_PartialReadThenClose(t *testing.T) {
+	data := []byte("hello world, this is a longer message")
+	rc := &drainingReadCloser{rc: io.NopCloser(bytes.NewReader(data))}
+
+	buf := make([]byte, 5)
+	n, err := rc.Read(buf)
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, "hello", string(buf))
+	require.NoError(t, rc.Close())
+}
+
+func TestDrainingReadCloser_CloseWithoutReading(t *testing.T) {
+	rc := &drainingReadCloser{rc: io.NopCloser(bytes.NewReader([]byte("untouched data")))}
+	require.NoError(t, rc.Close())
+}
+
+func TestDrainingReadCloser_EmptyBody(t *testing.T) {
+	rc := &drainingReadCloser{rc: io.NopCloser(bytes.NewReader(nil))}
+	require.NoError(t, rc.Close())
 }
