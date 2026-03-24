@@ -60,6 +60,38 @@ go test ./storetests/...
 
 Any variable that is not set will cause the corresponding tests to be skipped automatically.
 
+## Configuration
+
+### S3
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `DSTORE_S3_READ_ATTEMPTS` | `1` | Number of attempts for object read operations before returning an error. |
+| `DSTORE_S3_BUFFERED_READ` | `false` | Set to `true` to buffer the full object into memory before returning it to the caller. Useful when the underlying stream is unreliable. |
+| `DSTORE_S3_RETRY_PUSH_DELAY` | `0` (disabled) | Duration to wait between retries when pushing a local file (e.g. `500ms`, `2s`). Zero means no retry. |
+| `DSTORE_S3_MAX_IDLE_CONNS` | `500` | Maximum number of idle (keep-alive) HTTP connections across all S3 hosts. |
+| `DSTORE_S3_MAX_IDLE_CONNS_PER_HOST` | `100` | Maximum number of idle (keep-alive) HTTP connections per S3 host. Raise this for single-host setups (MinIO, Ceph) under heavy concurrency to avoid connection pool exhaustion. |
+| `DSTORE_S3_IDLE_CONN_TIMEOUT` | `90s` | How long an idle HTTP connection is kept alive before being closed (e.g. `30s`, `2m`). |
+
+> [!NOTE]
+> Standard AWS SDK environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, etc.) are also honoured. See the [AWS SDK for Go documentation](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html) for the full list.
+
+### Google Cloud Storage
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `DSTORE_WARN_SILENCED` | `false` | Set to `true` to log a warning whenever a GCS precondition-failed error is silenced (i.e. when writing without overwrite and the object already exists). |
+| `STORAGE_EMULATOR_HOST` | — | Points the GCS client at a local emulator such as [fake-gcs-server](https://github.com/fsouza/fake-gcs-server). Format: `host:port` (e.g. `localhost:4443`). When set, authentication is disabled and the JSON API is used for reads. |
+
+> [!NOTE]
+> `GOOGLE_APPLICATION_CREDENTIALS` (path to a service-account JSON key) is the standard way to authenticate the GCS client. See the [Google Cloud authentication documentation](https://cloud.google.com/docs/authentication/application-default-credentials) for other options.
+
+### Azure Blob Storage
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `AZURE_STORAGE_KEY` | — | Shared-key credential for the Azure storage account. When set this takes precedence over all other credential sources. When unset, `DefaultAzureCredential` is used (supports Managed Identity, Service Principal via `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`, Azure CLI, and VS Code credentials). |
+
 ## Contributing
 
 **Issues and PR in this repo related strictly to the dstore library.**
