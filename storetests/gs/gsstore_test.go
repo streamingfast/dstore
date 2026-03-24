@@ -26,6 +26,16 @@ var zlog, tracer = logging.PackageLogger("dstore", "github.com/streamingfast/dst
 //	STORETESTS_GS_STORE_URL=gs://dfuse-developement-random/store-tests
 var gsStoreBaseURL = os.Getenv("STORETESTS_GS_STORE_URL")
 
+// You can start fake-gcs-server via docker compose (see docker/fake-gcs-data for the seeded bucket):
+//
+//	docker compose up -d fake-gcs
+//
+// And then use:
+//
+//	STORETESTS_GS_EMULATOR_STORE_URL="gs://store-tests"
+//	STORAGE_EMULATOR_HOST="localhost:4443"
+var gsEmulatorStoreBaseURL = os.Getenv("STORETESTS_GS_EMULATOR_STORE_URL")
+
 func TestGSStore(t *testing.T) {
 	if gsStoreBaseURL == "" {
 		t.Skip("You must provide a valid Google Storage Bucket via STORETESTS_GS_STORE_URL environment variable to execute those tests")
@@ -80,6 +90,75 @@ func TestGSStore_CompressionAndMetering(t *testing.T) {
 	}
 
 	storetests.TestAll(t, createGSStoreFactory(t, gsStoreBaseURL, "zstd", false, opts...))
+
+	require.Equal(t, "compressedRead", compressedRead)
+	require.Equal(t, "uncompressedRead", uncompressedRead)
+	require.Equal(t, "compressedWrite", compressedWrite)
+	require.Equal(t, "uncompressedWrite", uncompressedWrite)
+
+	require.True(t, compressedReadByteCount > 0, "compressed read byte count should be greater than 0")
+	require.True(t, compressedWriteByteCount > 0, "compressed write byte count should be greater than 0")
+	require.True(t, uncompressedReadByteCount > 0, "uncompressed read byte count should be greater than 0")
+	require.True(t, uncompressedWriteByteCount > 0, "uncompressed write byte count should be greater than 0")
+}
+
+func TestGSStore_Emulator(t *testing.T) {
+	if gsEmulatorStoreBaseURL == "" {
+		t.Skip("You must provide a valid GCS emulator URL via STORETESTS_GS_EMULATOR_STORE_URL environment variable to execute those tests")
+		return
+	}
+	t.Setenv("STORAGE_EMULATOR_HOST", "localhost:4443")
+
+	storetests.TestAll(t, createGSStoreFactory(t, gsEmulatorStoreBaseURL, "", false))
+}
+
+func TestGSStore_Emulator_Overwrite(t *testing.T) {
+	if gsEmulatorStoreBaseURL == "" {
+		t.Skip("You must provide a valid GCS emulator URL via STORETESTS_GS_EMULATOR_STORE_URL environment variable to execute those tests")
+		return
+	}
+	t.Setenv("STORAGE_EMULATOR_HOST", "localhost:4443")
+
+	storetests.TestAll(t, createGSStoreFactory(t, gsEmulatorStoreBaseURL, "", true))
+}
+
+func TestGSStore_Emulator_CompressionAndMetering(t *testing.T) {
+	if gsEmulatorStoreBaseURL == "" {
+		t.Skip("You must provide a valid GCS emulator URL via STORETESTS_GS_EMULATOR_STORE_URL environment variable to execute those tests")
+		return
+	}
+	t.Setenv("STORAGE_EMULATOR_HOST", "localhost:4443")
+
+	compressedReadByteCount := 0
+	compressedWriteByteCount := 0
+	uncompressedReadByteCount := 0
+	uncompressedWriteByteCount := 0
+
+	var uncompressedRead string
+	var compressedRead string
+	var compressedWrite string
+	var uncompressedWrite string
+
+	opts := []dstore.Option{
+		dstore.WithCompressedReadCallback(func(ctx context.Context, i int) {
+			compressedReadByteCount += i
+			compressedRead = "compressedRead"
+		}),
+		dstore.WithUncompressedReadCallback(func(ctx context.Context, i int) {
+			uncompressedReadByteCount += i
+			uncompressedRead = "uncompressedRead"
+		}),
+		dstore.WithCompressedWriteCallback(func(ctx context.Context, i int) {
+			compressedWriteByteCount += i
+			compressedWrite = "compressedWrite"
+		}),
+		dstore.WithUncompressedWriteCallback(func(ctx context.Context, i int) {
+			uncompressedWriteByteCount += i
+			uncompressedWrite = "uncompressedWrite"
+		}),
+	}
+
+	storetests.TestAll(t, createGSStoreFactory(t, gsEmulatorStoreBaseURL, "zstd", false, opts...))
 
 	require.Equal(t, "compressedRead", compressedRead)
 	require.Equal(t, "uncompressedRead", uncompressedRead)

@@ -7,7 +7,11 @@
 #   STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin"
 #
 # Ceph RGW (S3-compatible):
-#   STORETESTS_S3_MINIO_STORE_URL="s3://localhost:8080/store-tests?region=none&insecure=true&access_key_id=cephaccesskey&secret_access_key=cephsecretkey"
+#   STORETESTS_S3_CEPH_STORE_URL="s3://localhost:8080/store-tests?region=none&insecure=true&access_key_id=cephaccesskey&secret_access_key=cephsecretkey"
+#
+# Google Cloud Storage (fake-gcs-server):
+#   STORETESTS_GS_EMULATOR_STORE_URL="gs://store-tests"
+#   STORAGE_EMULATOR_HOST="localhost:4443"
 
 services:
   # ── MinIO ────────────────────────────────────────────────────────────────────
@@ -60,3 +64,28 @@ services:
       timeout: 5s
       retries: 24
       start_period: 60s
+
+  # ── Google Cloud Storage (fake-gcs-server) ───────────────────────────────────
+  #
+  # Native arm64 + amd64. The store-tests bucket is pre-seeded from
+  # docker/fake-gcs-data/. Uses in-memory backend (data lost on restart).
+  fake-gcs:
+    image: fsouza/fake-gcs-server
+    ports:
+      - "4443:4443"   # GCS-compatible HTTP API
+    volumes:
+      - ./docker/fake-gcs-data:/data
+    command:
+      - "-scheme"
+      - "http"
+      - "-port"
+      - "4443"
+      - "-external-url"
+      - "http://localhost:4443"
+      - "-backend"
+      - "memory"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4443/storage/v1/b"]
+      interval: 5s
+      timeout: 5s
+      retries: 6

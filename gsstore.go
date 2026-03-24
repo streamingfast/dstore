@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 //
@@ -41,7 +42,14 @@ func (s *GSStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
 }
 
 func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*GSStore, error) {
-	client, err := storage.NewClient(ctx)
+	var clientOpts []option.ClientOption
+	if os.Getenv("STORAGE_EMULATOR_HOST") != "" {
+		// fake-gcs-server (and other emulators) don't handle the XML API correctly
+		// for object reads with percent-encoded slashes; use the JSON API instead.
+		clientOpts = append(clientOpts, storage.WithJSONReads())
+	}
+
+	client, err := storage.NewClient(ctx, clientOpts...)
 	if err != nil {
 		return nil, err
 	}

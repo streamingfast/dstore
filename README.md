@@ -24,22 +24,25 @@ Some of the store implementations can be tested directly while few others, from 
 essentially, requires some extra environment variables to run. They are skipped if the correct
 environment variables for the provider are not set.
 
-#### Local backends (MinIO + Ceph RGW)
+#### Local backends (MinIO + Ceph RGW + fake-gcs-server)
 
 A `docker-compose.yml` is provided at the root of the repository. It starts:
 - **MinIO** on port `9000` — S3-compatible object storage
 - **Ceph RGW** on port `8080` — built from `docker/ceph-local` using `quay.io/ceph/ceph:v19` (native arm64 + amd64); bootstraps a single-node cluster on first start (~30–60 s)
+- **fake-gcs-server** on port `4443` — GCS-compatible object storage (native arm64 + amd64); data is in-memory (lost on restart)
 
 ```bash
 docker compose up -d
 ```
 
-Once both containers are healthy, run the local S3 tests:
+Once the containers are healthy, run the local tests:
 
 ```bash
 STORETESTS_S3_MINIO_STORE_URL="s3://localhost:9000/store-tests?region=none&insecure=true&access_key_id=minioadmin&secret_access_key=minioadmin" \
 STORETESTS_S3_CEPH_STORE_URL="s3://localhost:8080/store-tests?region=none&insecure=true&access_key_id=cephaccesskey&secret_access_key=cephsecretkey" \
-go test ./storetests/s3/...
+STORETESTS_GS_EMULATOR_STORE_URL="gs://store-tests" \
+STORAGE_EMULATOR_HOST="localhost:4443" \
+go test ./storetests/...
 ```
 
 #### Cloud backends
@@ -49,7 +52,7 @@ To also run against real cloud providers, supply the relevant environment variab
 ```bash
 STORETESTS_GS_STORE_URL="gs://streamingfast-developement-random/store-tests" \
 STORETESTS_S3_STORE_URL="s3://streamingfast-customer-outbox/store-tests?region=us-east-2" \
-go test ./...
+go test ./storetests/...
 ```
 
 > [!NOTE]
