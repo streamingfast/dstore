@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/streamingfast/dstore"
 	"github.com/streamingfast/dstore/storetests"
 	"github.com/streamingfast/logging"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -200,6 +203,81 @@ func TestS3Store_Ceph_CompressionAndMetering(t *testing.T) {
 	require.True(t, compressedWriteByteCount > 0, "compressed write byte count should be greater than 0")
 	require.True(t, uncompressedReadByteCount > 0, "uncompressed read byte count should be greater than 0")
 	require.True(t, uncompressedWriteByteCount > 0, "uncompressed write byte count should be greater than 0")
+}
+
+// TestS3Store_Minio_NoConnectionLeak verifies that partially-read objects don't
+// exhaust the HTTP connection pool. Each iteration opens an object, reads only
+// the first byte, then closes the reader. With a correct implementation the
+// underlying HTTP body is drained on Close() so the connection is returned to
+// the pool and reused for the next request. Without the fix every open would
+// create a new TCP connection, and after MaxIdleConnsPerHost requests the pool
+// would overflow — visible as new connections instead of reused ones.
+//
+// Both the uncompressed and zstd-compressed paths are exercised because the
+// Close() chain differs between them (compression adds an extra reader layer
+// that can inadvertently close the HTTP body before the drain runs).
+func TestS3Store_Minio_NoConnectionLeak(t *testing.T) {
+	if s3MinioStoreBaseURL == "" {
+		t.Skip("You must provide a valid Minio S3 URL via STORETESTS_S3_MINIO_STORE_URL environment variable to execute those tests")
+		return
+	}
+
+	for _, compression := range []string{"", "zstd"} {
+		name := "uncompressed"
+		if compression != "" {
+			name = compression
+		}
+		t.Run(name, func(t *testing.T) {
+			assertNoConnectionLeak(t, createS3StoreFactory(t, s3MinioStoreBaseURL, compression, false, false))
+		})
+	}
+}
+
+func assertNoConnectionLeak(t *testing.T, factory storetests.StoreFactory) {
+	t.Helper()
+
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	// Write a small file once — this establishes the first TCP connection
+	// outside of the traced region so the loop starts from an idle connection.
+	err := store.WriteObject(t.Context(), "connleak-probe", strings.NewReader("hello connection pool"))
+	require.NoError(t, err)
+
+	const iterations = 500
+	var newConns, reusedConns atomic.Int64
+
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			if info.Reused {
+				reusedConns.Add(1)
+			} else {
+				newConns.Add(1)
+			}
+		},
+	}
+	tracedCtx := httptrace.WithClientTrace(t.Context(), trace)
+
+	// Open the object many times, reading only the first byte each time.
+	// This is the scenario that triggered the original leak: the caller
+	// abandons the stream after a partial read and relies on Close() to
+	// clean up, which must drain the HTTP body so the connection is reusable.
+	buf := make([]byte, 1)
+	for range iterations {
+		rc, err := store.OpenObject(tracedCtx, "connleak-probe")
+		require.NoError(t, err)
+		_, err = rc.Read(buf)
+		require.NoError(t, err)
+		require.NoError(t, rc.Close())
+	}
+
+	t.Logf("connections: new=%d reused=%d (out of %d iterations)", newConns.Load(), reusedConns.Load(), iterations)
+
+	// After the WriteObject above drains the pool, every traced OpenObject
+	// should reuse the idle connection. We allow a small slack (≤5 new) in
+	// case the server closes a keep-alive connection between iterations.
+	assert.LessOrEqual(t, newConns.Load(), int64(5), "too many new connections — possible connection pool leak")
+	assert.GreaterOrEqual(t, reusedConns.Load(), int64(iterations-5), "too few reused connections — possible connection pool leak")
 }
 
 func createS3StoreFactory(t *testing.T, baseURL string, compression string, overwrite bool, emptyBucket bool, opts ...dstore.Option) storetests.StoreFactory {

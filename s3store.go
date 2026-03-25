@@ -26,19 +26,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type drainingReadCloser struct {
-	rc io.ReadCloser
-}
-
-func (d *drainingReadCloser) Read(p []byte) (int, error) {
-	return d.rc.Read(p)
-}
-
-func (d *drainingReadCloser) Close() error {
-	io.Copy(io.Discard, d.rc)
-	return d.rc.Close()
-}
-
 type s3ReadCloser struct {
 	outer    io.ReadCloser
 	httpBody io.ReadCloser
@@ -49,10 +36,12 @@ func (s *s3ReadCloser) Read(p []byte) (int, error) {
 }
 
 func (s *s3ReadCloser) Close() error {
-	err := s.outer.Close()
+	// Drain the raw HTTP body BEFORE closing the outer reader chain. If outer
+	// closes httpBody first (which it does when there is no compression layer),
+	// the subsequent drain becomes a no-op and the connection is never returned
+	// to the pool.
 	io.Copy(io.Discard, s.httpBody)
-	s.httpBody.Close()
-	return err
+	return s.outer.Close()
 }
 
 var retryS3PushLocalFilesDelay time.Duration
