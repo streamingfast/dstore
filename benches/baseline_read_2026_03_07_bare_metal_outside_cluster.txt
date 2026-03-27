@@ -1,0 +1,152 @@
+goos: linux
+goarch: amd64
+pkg: github.com/streamingfast/dstore/storetests/gs
+cpu: AMD EPYC 9255 24-Core Processor
+BenchmarkGSStore_Read
+BenchmarkGSStore_Read/client=http
+BenchmarkGSStore_Read/client=http/compression=none
+BenchmarkGSStore_Read/client=http/compression=none/7MiB
+BenchmarkGSStore_Read/client=http/compression=none/7MiB-48    	       3	 336634552 ns/op	  21.80 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/7MiB-48    	       3	 347495191 ns/op	  21.12 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/7MiB-48    	       3	 351470770 ns/op	  20.88 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/7MiB-48    	       3	 332267784 ns/op	  22.09 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/7MiB-48    	       3	 391600905 ns/op	  18.74 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/7MiB-48    	       3	 434443195 ns/op	  16.90 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/15MiB
+BenchmarkGSStore_Read/client=http/compression=none/15MiB-48   	       3	 712644071 ns/op	  22.07 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/15MiB-48   	       3	 462087001 ns/op	  34.04 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/15MiB-48   	       3	 555747680 ns/op	  28.30 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/15MiB-48   	       3	 457705938 ns/op	  34.36 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/15MiB-48   	       3	 463335358 ns/op	  33.95 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/15MiB-48   	       3	 515683510 ns/op	  30.50 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/30MiB
+BenchmarkGSStore_Read/client=http/compression=none/30MiB-48   	       3	1265983699 ns/op	  24.85 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/30MiB-48   	       3	1180715719 ns/op	  26.64 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/30MiB-48   	       3	1001023276 ns/op	  31.43 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/30MiB-48   	       3	 712479558 ns/op	  44.15 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/30MiB-48   	       3	1197817910 ns/op	  26.26 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/30MiB-48   	       3	 807591666 ns/op	  38.95 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/60MiB
+BenchmarkGSStore_Read/client=http/compression=none/60MiB-48   	       3	2235970810 ns/op	  28.14 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/60MiB-48   	       3	6002868746 ns/op	  10.48 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/60MiB-48   	       3	3452038003 ns/op	  18.23 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/60MiB-48   	       3	3723775768 ns/op	  16.90 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/60MiB-48   	       3	3543473635 ns/op	  17.76 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/60MiB-48   	       3	5446233608 ns/op	  11.55 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/120MiB
+BenchmarkGSStore_Read/client=http/compression=none/120MiB-48  	       3	8940976558 ns/op	  14.07 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/120MiB-48  	       3	11446382938 ns/op	  10.99 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/120MiB-48  	       3	10979810165 ns/op	  11.46 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/120MiB-48  	       3	11483104468 ns/op	  10.96 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/120MiB-48  	       3	11295582166 ns/op	  11.14 MB/s
+BenchmarkGSStore_Read/client=http/compression=none/120MiB-48  	       3	11729627556 ns/op	  10.73 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB-48    	       3	 434639641 ns/op	  16.89 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB-48    	       3	 318128125 ns/op	  23.07 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB-48    	       3	 325713609 ns/op	  22.54 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB-48    	       3	 315967495 ns/op	  23.23 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB-48    	       3	 403199031 ns/op	  18.20 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/7MiB-48    	       3	 326135314 ns/op	  22.51 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB-48   	       3	 467222857 ns/op	  33.66 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB-48   	       3	 447682528 ns/op	  35.13 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB-48   	       3	 437920981 ns/op	  35.92 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB-48   	       3	 545183667 ns/op	  28.85 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB-48   	       3	 497039882 ns/op	  31.64 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/15MiB-48   	       3	 459211472 ns/op	  34.25 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB-48   	       3	2206592941 ns/op	  14.26 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB-48   	       3	2403042210 ns/op	  13.09 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB-48   	       3	2748998808 ns/op	  11.44 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB-48   	       3	2318812744 ns/op	  13.57 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB-48   	       3	2394490273 ns/op	  13.14 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/30MiB-48   	       3	2984510109 ns/op	  10.54 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB-48   	       3	5836281266 ns/op	  10.78 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB-48   	       3	4854403477 ns/op	  12.96 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB-48   	       3	5868066175 ns/op	  10.72 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB-48   	       3	5709045408 ns/op	  11.02 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB-48   	       3	5732814732 ns/op	  10.97 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/60MiB-48   	       3	5995642844 ns/op	  10.49 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB-48  	       3	10972347374 ns/op	  11.47 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB-48  	       3	11040393158 ns/op	  11.40 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB-48  	       3	11081770765 ns/op	  11.35 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB-48  	       3	11461956787 ns/op	  10.98 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB-48  	       3	11375917148 ns/op	  11.06 MB/s
+BenchmarkGSStore_Read/client=http/compression=zstd/120MiB-48  	       3	10765576584 ns/op	  11.69 MB/s
+BenchmarkGSStore_Read/client=grpc
+BenchmarkGSStore_Read/client=grpc/compression=none
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB-48    	       3	 411389771 ns/op	  17.84 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB-48    	       3	 419274429 ns/op	  17.51 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB-48    	       3	 392168911 ns/op	  18.72 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB-48    	       3	 364414357 ns/op	  20.14 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB-48    	       3	 381803095 ns/op	  19.22 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/7MiB-48    	       3	 452619696 ns/op	  16.22 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB-48   	       3	 669434677 ns/op	  23.50 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB-48   	       3	 641856742 ns/op	  24.50 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB-48   	       3	 708145218 ns/op	  22.21 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB-48   	       3	 703291583 ns/op	  22.36 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB-48   	       3	 620455287 ns/op	  25.35 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/15MiB-48   	       3	 650567801 ns/op	  24.18 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB-48   	       3	1099792192 ns/op	  28.60 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB-48   	       3	1182652162 ns/op	  26.60 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB-48   	       3	1119775073 ns/op	  28.09 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB-48   	       3	1195250515 ns/op	  26.32 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB-48   	       3	1194604338 ns/op	  26.33 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/30MiB-48   	       3	1298003036 ns/op	  24.24 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB-48   	       3	2293540666 ns/op	  27.43 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB-48   	       3	2061709793 ns/op	  30.52 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB-48   	       3	2174258194 ns/op	  28.94 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB-48   	       3	2117845675 ns/op	  29.71 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB-48   	       3	2233951092 ns/op	  28.16 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/60MiB-48   	       3	2038399551 ns/op	  30.86 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB-48  	       3	4023221395 ns/op	  31.28 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB-48  	       3	3764577730 ns/op	  33.42 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB-48  	       3	4000401855 ns/op	  31.45 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB-48  	       3	4118591312 ns/op	  30.55 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB-48  	       3	4388288152 ns/op	  28.67 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=none/120MiB-48  	       3	4038693532 ns/op	  31.16 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB-48    	       3	 390741016 ns/op	  18.78 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB-48    	       3	 407711546 ns/op	  18.00 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB-48    	       3	 405562404 ns/op	  18.10 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB-48    	       3	 367807666 ns/op	  19.96 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB-48    	       3	 456062145 ns/op	  16.09 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/7MiB-48    	       3	 397284493 ns/op	  18.48 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB-48   	       3	 694264447 ns/op	  22.66 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB-48   	       3	 681117652 ns/op	  23.09 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB-48   	       3	 651773334 ns/op	  24.13 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB-48   	       3	 681145526 ns/op	  23.09 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB-48   	       3	 628597841 ns/op	  25.02 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/15MiB-48   	       3	 708479274 ns/op	  22.20 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB-48   	       3	1153147738 ns/op	  27.28 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB-48   	       3	1097264727 ns/op	  28.67 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB-48   	       3	1157063199 ns/op	  27.19 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB-48   	       3	1195328835 ns/op	  26.32 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB-48   	       3	1183117094 ns/op	  26.59 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/30MiB-48   	       3	1112923923 ns/op	  28.27 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB-48   	       3	2264626252 ns/op	  27.78 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB-48   	       3	2103383237 ns/op	  29.91 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB-48   	       3	2171661902 ns/op	  28.97 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB-48   	       3	2139877516 ns/op	  29.40 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB-48   	       3	2141894209 ns/op	  29.37 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/60MiB-48   	       3	2072861556 ns/op	  30.35 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB-48  	       3	3968779857 ns/op	  31.70 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB-48  	       3	4228925215 ns/op	  29.75 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB-48  	       3	3929905931 ns/op	  32.02 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB-48  	       3	4070826748 ns/op	  30.91 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB-48  	       3	4002064934 ns/op	  31.44 MB/s
+BenchmarkGSStore_Read/client=grpc/compression=zstd/120MiB-48  	       3	4420731176 ns/op	  28.46 MB/s
+PASS

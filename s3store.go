@@ -248,7 +248,7 @@ func ParseS3URL(s3URL *url.URL) (configOptions []func(*awsconfig.LoadOptions) er
 		))
 	}
 
-	return configOptions, bucket, strings.Trim(path, "/"), s3URL.Query().Get("storageClass"), nil
+	return configOptions, bucket, strings.Trim(path, "/"), getStorageClass(s3URL.Query()), nil
 }
 
 func hasCustomEndpoint(s3URL *url.URL) bool {
@@ -271,6 +271,17 @@ func hasCustomEndpoint(s3URL *url.URL) bool {
 	// query parameter `infer_aws_endpoint=true` can be used to tell the store
 	// implementation that the hostname is the actual bucket
 	return s3URL.Query().Get("infer_aws_endpoint") == ""
+}
+
+func getStorageClass(q url.Values) string {
+	if v := q.Get("storage_class"); v != "" {
+		return v
+	}
+	if v := q.Get("storageClass"); v != "" {
+		zlog.Warn("query parameter 'storageClass' is deprecated, use 'storage_class' instead")
+		return v
+	}
+	return ""
 }
 
 func (s *S3Store) BaseURL() *url.URL {

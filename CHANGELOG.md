@@ -2,6 +2,17 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [MAINTAINERS.md](./MAINTAINERS.md) for instructions to keep up to date.
 
+## Unreleased
+
+### Added
+
+* GCS store: opt-in gRPC transport via `client_protocol=grpc` query parameter (e.g. `gs://bucket/path?client_protocol=grpc`). Defaults to the existing HTTP client; the gRPC client is selected only when this parameter is explicitly set.
+* S3 store: `storage_class` query parameter as the canonical snake_case name for `storageClass`.
+
+### Deprecated
+
+* S3 store: `storageClass` query parameter is deprecated in favour of `storage_class`; a warning is logged when the old form is used.
+
 ## v0.2.1
 
 ### Added

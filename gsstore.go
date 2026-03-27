@@ -18,6 +18,8 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 //
@@ -42,18 +44,25 @@ func (s *GSStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
 }
 
 func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*GSStore, error) {
-	var clientOpts []option.ClientOption
-	if os.Getenv("STORAGE_EMULATOR_HOST") != "" {
-		// fake-gcs-server (and other emulators) don't handle the XML API correctly
-		// for object reads with percent-encoded slashes; use the JSON API instead.
-		clientOpts = append(clientOpts, storage.WithJSONReads())
-	}
+	query := baseURL.Query()
+	userProject := query.Get("project")
 
-	client, err := storage.NewClient(ctx, clientOpts...)
+	var client *storage.Client
+	var err error
+	if query.Get("client_protocol") == "grpc" {
+		client, err = storage.NewGRPCClient(ctx)
+	} else {
+		var clientOpts []option.ClientOption
+		if os.Getenv("STORAGE_EMULATOR_HOST") != "" {
+			// fake-gcs-server (and other emulators) don't handle the XML API correctly
+			// for object reads with percent-encoded slashes; use the JSON API instead.
+			clientOpts = append(clientOpts, storage.WithJSONReads())
+		}
+		client, err = storage.NewClient(ctx, clientOpts...)
+	}
 	if err != nil {
 		return nil, err
 	}
-	userProject := baseURL.Query().Get("project")
 
 	client.SetRetry(storage.WithBackoff(gax.Backoff{}))
 
@@ -179,6 +188,11 @@ func (s *GSStore) WriteObject(ctx context.Context, base string, f io.Reader, met
 func silencePreconditionError(err error) error {
 	if e, ok := err.(*googleapi.Error); ok {
 		if e.Code == http.StatusPreconditionFailed {
+			return nil
+		}
+	}
+	if st, ok := grpcstatus.FromError(err); ok {
+		if st.Code() == codes.FailedPrecondition {
 			return nil
 		}
 	}
