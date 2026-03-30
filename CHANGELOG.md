@@ -2,12 +2,16 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [MAINTAINERS.md](./MAINTAINERS.md) for instructions to keep up to date.
 
-## Unreleased
+## v0.2.2
 
 ### Added
 
 * GCS store: opt-in gRPC transport via `client_protocol=grpc` query parameter (e.g. `gs://bucket/path?client_protocol=grpc`). Defaults to the existing HTTP client; the gRPC client is selected only when this parameter is explicitly set.
 * S3 store: `storage_class` query parameter as the canonical snake_case name for `storageClass`.
+
+### Changed
+
+* S3 store: each store clone now gets its own transport for failure isolation; adds `ResponseHeaderTimeout` to prevent hung requests and configures HTTP/2 health checks via `x/net/http2`; default connection pool sizes are reduced.
 
 ### Deprecated
 
