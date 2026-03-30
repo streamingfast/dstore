@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.uber.org/zap"
+	"golang.org/x/net/http2"
 )
 
 type s3ReadCloser struct {
@@ -47,9 +48,32 @@ func (s *s3ReadCloser) Close() error {
 var retryS3PushLocalFilesDelay time.Duration
 var s3ReadAttempts = 1
 var bufferedS3Read bool
-var s3MaxIdleConns = 500
-var s3MaxIdleConnsPerHost = 100
+var s3MaxIdleConns = 100
+var s3MaxIdleConnsPerHost = 10
 var s3IdleConnTimeout = 90 * time.Second
+
+func newS3Transport() *http.Transport {
+	t := &http.Transport{
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          s3MaxIdleConns,
+		MaxIdleConnsPerHost:   s3MaxIdleConnsPerHost,
+		IdleConnTimeout:       s3IdleConnTimeout,
+		ResponseHeaderTimeout: 30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+	}
+
+	if t2, err := http2.ConfigureTransports(t); err == nil {
+		t2.ReadIdleTimeout = 31 * time.Second
+		t2.PingTimeout = 15 * time.Second
+	}
+
+	return t
+}
 
 func init() {
 	retry := os.Getenv("DSTORE_S3_RETRY_PUSH_DELAY")
@@ -141,16 +165,7 @@ func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 	}
 
 	awsConfig = append(awsConfig, awsconfig.WithHTTPClient(&http.Client{
-		Transport: &http.Transport{
-			ForceAttemptHTTP2:   true,
-			MaxIdleConns:        s3MaxIdleConns,
-			MaxIdleConnsPerHost: s3MaxIdleConnsPerHost,
-			IdleConnTimeout:     s3IdleConnTimeout,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-		},
+		Transport: newS3Transport(),
 	}))
 
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsConfig...)
