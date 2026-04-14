@@ -52,27 +52,33 @@ var s3MaxIdleConns = 100
 var s3MaxIdleConnsPerHost = 10
 var s3IdleConnTimeout = 90 * time.Second
 
-func newS3Transport() *http.Transport {
-	t := &http.Transport{
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          s3MaxIdleConns,
-		MaxIdleConnsPerHost:   s3MaxIdleConnsPerHost,
-		IdleConnTimeout:       s3IdleConnTimeout,
-		ResponseHeaderTimeout: 30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-	}
+var sharedTransport http.RoundTripper
+var sharedTransportOnce sync.Once
 
-	if t2, err := http2.ConfigureTransports(t); err == nil {
-		t2.ReadIdleTimeout = 31 * time.Second
-		t2.PingTimeout = 15 * time.Second
-	}
+func getSharedTransport() http.RoundTripper {
+	sharedTransportOnce.Do(func() {
+		t := &http.Transport{
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          s3MaxIdleConns,
+			MaxIdleConnsPerHost:   s3MaxIdleConnsPerHost,
+			IdleConnTimeout:       s3IdleConnTimeout,
+			ResponseHeaderTimeout: 30 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+		}
 
-	return t
+		if t2, err := http2.ConfigureTransports(t); err == nil {
+			t2.ReadIdleTimeout = 31 * time.Second
+			t2.PingTimeout = 15 * time.Second
+		}
+
+		sharedTransport = t
+	})
+	return sharedTransport
 }
 
 func init() {
@@ -165,7 +171,7 @@ func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 	}
 
 	awsConfig = append(awsConfig, awsconfig.WithHTTPClient(&http.Client{
-		Transport: newS3Transport(),
+		Transport: getSharedTransport(),
 	}))
 
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsConfig...)
