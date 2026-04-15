@@ -18,6 +18,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	"google.golang.org/api/option/internaloption"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 )
@@ -50,7 +51,21 @@ func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 	var client *storage.Client
 	var err error
 	if query.Get("client_protocol") == "grpc" {
-		client, err = storage.NewGRPCClient(ctx)
+		var grpcOpts []option.ClientOption
+		if userProject != "" {
+			// DirectPath (automatically enabled on GKE) bypasses GFE and goes directly to the
+			// storage backend. That backend does not honour the x-goog-user-project gRPC metadata
+			// header for requester-pays billing, so we must disable DirectPath when a userProject
+			// is set. We keep gRPC for efficient serialisation/streaming; traffic still goes over
+			// gRPC but routes through GFE which correctly enforces requester-pays.
+			// See: https://github.com/googleapis/google-cloud-go/blob/main/auth/grpctransport/directpath.go
+			// TODO: remove once the upstream library implements the quota-project chained interceptor.
+			grpcOpts = append(grpcOpts,
+				internaloption.EnableDirectPath(false),
+			)
+			zlog.Warn("DirectPath GCS optimization DISABLED because it is not yet supported with both 'project=' and 'client_protocol=grpc'", zap.String("base_url", baseURL.String()))
+		}
+		client, err = storage.NewGRPCClient(ctx, grpcOpts...)
 	} else {
 		var clientOpts []option.ClientOption
 		if os.Getenv("STORAGE_EMULATOR_HOST") != "" {
