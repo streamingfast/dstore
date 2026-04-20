@@ -2,6 +2,13 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [MAINTAINERS.md](./MAINTAINERS.md) for instructions to keep up to date.
 
+## v0.2.3
+
+### Fixed
+
+* GCS store: disable gRPC DirectPath when both a project is set and `client_protocol=grpc` is used, preventing connection issues in that configuration.
+* S3 store: share a single HTTP transport across all store clones for proper HTTP/2 multiplexing, replacing the previous per-clone transport that broke connection sharing.
+
 ## v0.2.2
 
 ### Added
