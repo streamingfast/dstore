@@ -320,7 +320,11 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, met
 	}
 
 	if !s.overwrite && exists {
-		// We silently ignore when we ask not to overwrite
+		// We silently ignore when we ask not to overwrite, but we still must
+		// consume the reader so that pipe-based producers (e.g. an io.Pipe fed
+		// by a goroutine) don't block forever waiting for a consumer that
+		// will never come.
+		_, _ = io.Copy(io.Discard, f)
 		return nil
 	}
 
