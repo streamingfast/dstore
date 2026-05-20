@@ -179,7 +179,11 @@ func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
 
-	s.client = s3.NewFromConfig(cfg)
+	s.client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+		// Suppress flood of "Response has no supported checksum" warnings from the SDK.
+		// See https://github.com/aws/aws-sdk-go-v2/issues/3020
+		o.DisableLogOutputChecksumValidationSkipped = true
+	})
 	s.uploader = manager.NewUploader(s.client)
 	s.downloader = manager.NewDownloader(s.client)
 	s.bucket = bucket

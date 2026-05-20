@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 * S3 store: `WriteObject` now drains the input reader when skipping a write because the destination already exists and `overwrite` is disabled. Previously the reader was left untouched, which would deadlock pipe-based producers (e.g. a goroutine writing to an `io.Pipe`) and leak both the goroutine and any memory it had captured.
 
+* S3 store: suppress checksum validation warnings from the SDK by setting `DisableLogOutputChecksumValidationSkipped` to `true`.
+
 ## v0.2.3
 
 ### Fixed
