@@ -258,6 +258,10 @@ func ParseS3URL(s3URL *url.URL) (configOptions []func(*awsconfig.LoadOptions) er
 		))
 	}
 
+	if profile := s3URL.Query().Get("profile"); profile != "" {
+		configOptions = append(configOptions, awsconfig.WithSharedConfigProfile(profile))
+	}
+
 	return configOptions, bucket, strings.Trim(path, "/"), getStorageClass(s3URL.Query()), nil
 }
 
