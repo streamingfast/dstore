@@ -2,6 +2,9 @@ name: Go Test
 
 on:
   pull_request:
+  push:
+    branches:
+      - develop
 
 jobs:
   test:
@@ -11,5 +14,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Run tests
+      - name: Test
         run: go test ./...
+      - name: Build
+        run: go build ./...
