@@ -183,6 +183,14 @@ func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 		// Suppress flood of "Response has no supported checksum" warnings from the SDK.
 		// See https://github.com/aws/aws-sdk-go-v2/issues/3020
 		o.DisableLogOutputChecksumValidationSkipped = true
+
+		// Only compute request checksums when the operation requires it. As of
+		// service/s3 v1.73.0 the SDK computes CRC32 checksums on PUT/multipart by
+		// default, which breaks non-AWS S3-compatible backends (they reject the
+		// parts). This is the programmatic equivalent of setting the env var
+		// AWS_REQUEST_CHECKSUM_CALCULATION=when_required.
+		// See https://github.com/aws/aws-sdk-go-v2/discussions/2960
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 	})
 	s.uploader = manager.NewUploader(s.client)
 	s.downloader = manager.NewDownloader(s.client)

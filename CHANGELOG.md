@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 * S3 store: suppress checksum validation warnings from the SDK by setting `DisableLogOutputChecksumValidationSkipped` to `true`.
 
+* S3 store: only compute request checksums when required (`RequestChecksumCalculation = WhenRequired`). Since `service/s3` v1.73.0 the SDK computes CRC32 checksums on PUT/multipart uploads by default, which breaks non-AWS S3-compatible backends that reject the parts. This removes the need for the `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` env var workaround. See https://github.com/aws/aws-sdk-go-v2/discussions/2960.
+
 ## v0.2.3
 
 ### Fixed
