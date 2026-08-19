@@ -79,6 +79,7 @@ BenchmarkGSStore_Read/compression=none/30MiB  128.15        260.15  +103.00% (p=
 ## Zstd decoder concurrency (CPU-only)
 
 Isolates `WithDecoderConcurrency(1)` (dstore pooling) vs klauspost defaults. No GCS.
+Payloads are protobuf dummy-blockchain blocks.
 
 ```bash
 go test . -c -o zstd_bench.test
@@ -90,7 +91,7 @@ benchstat -col /conc zstd-conc.txt
 
 ## Zstd decoder concurrency (GCS)
 
-Same comparison with the compressed stream still coming from GCS. Use compressible payloads so decode work is visible next to network.
+Same comparison with the compressed stream still coming from GCS. Payloads are protobuf-encoded dummy-blockchain blocks (same fill algorithm as `dummy-blockchain` itself) so zstd sees blockchain-shaped data rather than random bytes.
 
 Cross-compile for a Linux amd64 node, copy the binary, then:
 

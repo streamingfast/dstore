@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/streamingfast/dstore/internal/dummyblock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -357,7 +358,7 @@ func BenchmarkZstdDecoderConcurrency(b *testing.B) {
 	}
 
 	for _, size := range sizes {
-		payload := compressiblePayload(size)
+		payload := dummyblock.Proto(size)
 		var compressed bytes.Buffer
 		enc, err := zstd.NewWriter(&compressed, zstd.WithEncoderConcurrency(1))
 		if err != nil {
@@ -378,7 +379,7 @@ func BenchmarkZstdDecoderConcurrency(b *testing.B) {
 					b.Fatal(err)
 				}
 				defer dec.Close()
-				b.SetBytes(int64(size))
+				b.SetBytes(int64(len(payload)))
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
@@ -389,14 +390,14 @@ func BenchmarkZstdDecoderConcurrency(b *testing.B) {
 					if err != nil {
 						b.Fatal(err)
 					}
-					if n != int64(size) {
-						b.Fatalf("decoded %d bytes, want %d", n, size)
+					if n != int64(len(payload)) {
+						b.Fatalf("decoded %d bytes, want %d", n, len(payload))
 					}
 				}
 			})
 
 			b.Run(fmt.Sprintf("par/%s/%dMiB", mode.name, size>>20), func(b *testing.B) {
-				b.SetBytes(int64(size))
+				b.SetBytes(int64(len(payload)))
 				b.ReportAllocs()
 				b.ResetTimer()
 				b.RunParallel(func(pb *testing.PB) {

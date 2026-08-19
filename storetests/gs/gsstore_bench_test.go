@@ -14,6 +14,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/klauspost/compress/zstd"
 	"github.com/streamingfast/dstore"
+	"github.com/streamingfast/dstore/internal/dummyblock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,8 +93,9 @@ func BenchmarkGSStore_Emulator_Read(b *testing.B) {
 //
 // Compares WithDecoderConcurrency(1) (dstore pooling path) against klauspost
 // defaults (async pipeline, up to 4 goroutines) while the compressed stream
-// is still coming from GCS. Payload is compressible so decode work is real;
-// existing read/write benches use incompressible data on purpose.
+// is still coming from GCS. Payloads are protobuf dummy-blockchain blocks so
+// zstd sees blockchain-shaped data; existing read/write benches use
+// incompressible random bytes on purpose.
 //
 // Run with:
 //
@@ -142,7 +144,7 @@ func runGSZstdDecoderConcurrency(b *testing.B, baseURL, clientProtocol string) {
 
 	for _, sizeMiB := range benchSizesMiB {
 		sizeBytes := sizeMiB * 1024 * 1024
-		data := newCompressibleBenchData(sizeBytes)
+		data := dummyblock.Proto(sizeBytes)
 
 		var compressed bytes.Buffer
 		enc, err := zstd.NewWriter(&compressed, zstd.WithEncoderConcurrency(1))
@@ -158,7 +160,7 @@ func runGSZstdDecoderConcurrency(b *testing.B, baseURL, clientProtocol string) {
 
 		for _, mode := range modes {
 			b.Run(fmt.Sprintf("%s/%dMiB", mode.name, sizeMiB), func(b *testing.B) {
-				b.SetBytes(int64(sizeBytes))
+				b.SetBytes(int64(len(data)))
 				b.ReportAllocs()
 				b.ResetTimer()
 				for b.Loop() {
@@ -281,21 +283,6 @@ func newBenchData(size int) []byte {
 	rng := rand.New(rand.NewPCG(42, 0))
 	for i := range len(data) {
 		data[i] = byte(rng.Uint32())
-	}
-	return data
-}
-
-// newCompressibleBenchData repeats a 1KiB random block so zstd has real
-// match work. Use this when the decode pipeline is what you want to time.
-func newCompressibleBenchData(size int) []byte {
-	block := make([]byte, 1024)
-	rng := rand.New(rand.NewPCG(42, 1))
-	for i := range block {
-		block[i] = byte(rng.Uint32())
-	}
-	data := make([]byte, size)
-	for i := 0; i < size; i += len(block) {
-		copy(data[i:], block)
 	}
 	return data
 }

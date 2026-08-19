@@ -1,6 +1,6 @@
 module github.com/streamingfast/dstore
 
-go 1.24.0
+go 1.24.2
 
 toolchain go1.24.11
 
@@ -16,12 +16,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
 	github.com/googleapis/gax-go/v2 v2.15.0
 	github.com/klauspost/compress v1.19.2
+	github.com/streamingfast/dummy-blockchain v1.7.7
 	github.com/streamingfast/logging v0.0.0-20220304214715-bc750a74b424
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.21.0
 	golang.org/x/net v0.46.0
 	google.golang.org/api v0.256.0
 	google.golang.org/grpc v1.76.0
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
@@ -94,6 +96,5 @@ require (
 	google.golang.org/genproto v0.0.0-20250922171735-9219d122eba9 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251111163417-95abcf5c77ba // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
