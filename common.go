@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
-
-	"github.com/klauspost/compress/zstd"
+	"sync/atomic"
 )
 
 //
@@ -19,11 +19,31 @@ type commonStore struct {
 	extension       string
 	compressionType string
 	overwrite       bool
+	zstd            *ZstdConfig
+	pools           atomic.Pointer[zstdPools]
 
 	compressedWriteCallback   func(ctx context.Context, size int)
 	uncompressedWriteCallback func(ctx context.Context, size int)
 	compressedReadCallback    func(ctx context.Context, size int)
 	uncompressedReadCallback  func(ctx context.Context, size int)
+}
+
+func newCommonStore(extension, compressionType string, overwrite bool, conf config, baseURL *url.URL) (*commonStore, error) {
+	zstdCfg, err := applyZstdConfig(conf.zstd, baseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return &commonStore{
+		extension:                 extension,
+		compressionType:           compressionType,
+		overwrite:                 overwrite,
+		zstd:                      zstdCfg,
+		uncompressedReadCallback:  conf.uncompressedReadCallback,
+		compressedReadCallback:    conf.compressedReadCallback,
+		uncompressedWriteCallback: conf.uncompressedWriteCallback,
+		compressedWriteCallback:   conf.compressedWriteCallback,
+	}, nil
 }
 
 func (c *commonStore) Overwrite() bool      { return c.overwrite }
@@ -137,20 +157,25 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 			return err
 		}
 	case "zstd":
-		zstdEncoder, err := zstd.NewWriter(destination)
+		pools := c.getPools()
+		enc, err := pools.GetEncoder()
 		if err != nil {
 			return err
 		}
+		enc.Reset(destination)
 		if c.uncompressedWriteCallback != nil {
-			dest = &callbackWriter{w: zstdEncoder, callback: c.uncompressedWriteCallback, ctx: ctx}
+			dest = &callbackWriter{w: enc, callback: c.uncompressedWriteCallback, ctx: ctx}
 		} else {
-			dest = zstdEncoder
+			dest = enc
 		}
-		if _, err := io.Copy(dest, source); err != nil {
-			return err
+		_, copyErr := io.Copy(dest, source)
+		closeErr := enc.Close()
+		pools.PutEncoder(enc)
+		if copyErr != nil {
+			return copyErr
 		}
-		if err := zstdEncoder.Close(); err != nil {
-			return err
+		if closeErr != nil {
+			return closeErr
 		}
 	default:
 		if c.uncompressedWriteCallback != nil {
@@ -184,15 +209,20 @@ func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadClos
 		}
 
 	case "zstd":
-		zstdReader, err := zstd.NewReader(reader)
+		pools := c.getPools()
+		dec, err := pools.GetDecoder()
 		if err != nil {
 			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
 		}
-
+		if err := dec.Reset(reader); err != nil {
+			dec.Close()
+			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
+		}
+		zrc := &zstdReadCloser{dec: dec, src: reader, pools: pools}
 		if c.uncompressedReadCallback != nil {
-			out = &callbackReadCloser{rc: zstdReader.IOReadCloser(), callback: c.uncompressedReadCallback, ctx: ctx}
+			out = &callbackReadCloser{rc: zrc, callback: c.uncompressedReadCallback, ctx: ctx}
 		} else {
-			out = zstdReader.IOReadCloser()
+			out = zrc
 		}
 	default:
 		if c.uncompressedReadCallback != nil {

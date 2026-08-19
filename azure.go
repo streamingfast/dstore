@@ -87,14 +87,9 @@ func newAzureStoreContext(_ context.Context, baseURL *url.URL, extension, compre
 		opt.apply(&conf)
 	}
 
-	common := &commonStore{
-		compressionType:           compressionType,
-		extension:                 extension,
-		overwrite:                 overwrite,
-		uncompressedReadCallback:  conf.uncompressedReadCallback,
-		compressedReadCallback:    conf.compressedReadCallback,
-		uncompressedWriteCallback: conf.uncompressedWriteCallback,
-		compressedWriteCallback:   conf.compressedWriteCallback,
+	common, err := newCommonStore(extension, compressionType, overwrite, conf, baseURL)
+	if err != nil {
+		return nil, err
 	}
 
 	return &AzureStore{

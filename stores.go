@@ -117,6 +117,7 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 type config struct {
 	compression string
 	overwrite   bool
+	zstd        *ZstdConfig
 
 	compressedWriteCallback   func(ctx context.Context, size int)
 	compressedReadCallback    func(ctx context.Context, size int)
@@ -144,6 +145,19 @@ func (f optionFunc) apply(config *config) {
 func Compression(compressionType string) Option {
 	return optionFunc(func(config *config) {
 		config.compression = compressionType
+	})
+}
+
+// ZstdCompression tunes the zstd encoder for stores that know their object shape.
+// Only affects writes; readers take the window from the frame header.
+//
+// Query parameters `zstd_level` and `zstd_window` override these values when
+// present so an operator can change compression without a rebuild. A warning
+// is logged when that happens.
+func ZstdCompression(cfg ZstdConfig) Option {
+	return optionFunc(func(config *config) {
+		cp := cfg
+		config.zstd = &cp
 	})
 }
 

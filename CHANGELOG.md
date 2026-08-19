@@ -2,6 +2,18 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [MAINTAINERS.md](./MAINTAINERS.md) for instructions to keep up to date.
 
+## Unreleased
+
+### Added
+
+* Add `ZstdCompression` option (`ZstdConfig`) to tune zstd encoder level and window size without exposing klauspost types. Window size must be a power of two in `[1KiB, 128MiB]`; larger windows are rejected because the zstd CLI and most other language bindings refuse them by default.
+* Add URL query parameters `zstd_level` (`default`, `better`, `best`) and `zstd_window` (bytes or `KiB`/`MiB`/`GiB`). A query parameter overrides a code-set value so operators can tune a store without a rebuild, and a warning is logged when that happens.
+
+### Changed
+
+* Bump `github.com/klauspost/compress` from v1.10.2 to v1.19.2 so `SpeedBetterCompression` and `SpeedBestCompression` are real levels rather than aliases of default.
+* Always pool zstd encoders and decoders per store, and force encoder/decoder concurrency to 1.
+
 ## v0.2.3
 
 ### Fixed

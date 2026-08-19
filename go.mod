@@ -15,10 +15,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.43
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.71.0
 	github.com/googleapis/gax-go/v2 v2.15.0
-	github.com/klauspost/compress v1.10.2
+	github.com/klauspost/compress v1.19.2
 	github.com/streamingfast/logging v0.0.0-20220304214715-bc750a74b424
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.21.0
+	golang.org/x/net v0.46.0
 	google.golang.org/api v0.256.0
 	google.golang.org/grpc v1.76.0
 )
@@ -84,7 +85,6 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
-	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/oauth2 v0.33.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
