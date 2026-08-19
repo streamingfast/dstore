@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
@@ -137,6 +139,44 @@ func TestZstdPartialReadThenClose(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 16, n)
 	require.NoError(t, r.Close())
+
+	roundTripZstd(t, &c, payload)
+}
+
+func TestZstdPartialCloseDoesNotLeakGoroutines(t *testing.T) {
+	c := commonStore{compressionType: "zstd"}
+	payload := compressiblePayload(256 << 10)
+
+	var compressed bytes.Buffer
+	require.NoError(t, c.compressedCopy(context.Background(), &compressed, bytes.NewReader(payload)))
+
+	abandon := func() {
+		t.Helper()
+		r, err := c.uncompressedReader(context.Background(), io.NopCloser(bytes.NewReader(compressed.Bytes())))
+		require.NoError(t, err)
+		buf := make([]byte, 32)
+		n, err := r.Read(buf)
+		require.NoError(t, err)
+		require.Equal(t, 32, n)
+		require.NoError(t, r.Close())
+	}
+
+	for range 5 {
+		abandon()
+	}
+
+	runtime.GC()
+	time.Sleep(20 * time.Millisecond)
+	before := runtime.NumGoroutine()
+
+	for range 200 {
+		abandon()
+	}
+
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return runtime.NumGoroutine() <= before+5
+	}, 2*time.Second, 50*time.Millisecond, "goroutine leak after partial-read Close: before=%d now=%d", before, runtime.NumGoroutine())
 
 	roundTripZstd(t, &c, payload)
 }
@@ -300,6 +340,82 @@ func TestParseZstdWindow(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
+	}
+}
+
+// BenchmarkZstdDecoderConcurrency isolates WithDecoderConcurrency(1) vs klauspost
+// defaults (min(4, GOMAXPROCS) async block pipeline). Sequential is one object
+// stream; parallel is many concurrent objects, which is the dstore read shape.
+func BenchmarkZstdDecoderConcurrency(b *testing.B) {
+	sizes := []int{1 << 20, 8 << 20, 32 << 20}
+	modes := []struct {
+		name string
+		opts []zstd.DOption
+	}{
+		{name: "conc=1", opts: []zstd.DOption{zstd.WithDecoderConcurrency(1)}},
+		{name: "conc=default", opts: nil},
+	}
+
+	for _, size := range sizes {
+		payload := compressiblePayload(size)
+		var compressed bytes.Buffer
+		enc, err := zstd.NewWriter(&compressed, zstd.WithEncoderConcurrency(1))
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := io.Copy(enc, bytes.NewReader(payload)); err != nil {
+			b.Fatal(err)
+		}
+		if err := enc.Close(); err != nil {
+			b.Fatal(err)
+		}
+		src := compressed.Bytes()
+
+		for _, mode := range modes {
+			b.Run(fmt.Sprintf("seq/%s/%dMiB", mode.name, size>>20), func(b *testing.B) {
+				dec, err := zstd.NewReader(nil, mode.opts...)
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer dec.Close()
+				b.SetBytes(int64(size))
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					if err := dec.Reset(bytes.NewReader(src)); err != nil {
+						b.Fatal(err)
+					}
+					n, err := io.Copy(io.Discard, dec)
+					if err != nil {
+						b.Fatal(err)
+					}
+					if n != int64(size) {
+						b.Fatalf("decoded %d bytes, want %d", n, size)
+					}
+				}
+			})
+
+			b.Run(fmt.Sprintf("par/%s/%dMiB", mode.name, size>>20), func(b *testing.B) {
+				b.SetBytes(int64(size))
+				b.ReportAllocs()
+				b.ResetTimer()
+				b.RunParallel(func(pb *testing.PB) {
+					dec, err := zstd.NewReader(nil, mode.opts...)
+					if err != nil {
+						b.Fatal(err)
+					}
+					defer dec.Close()
+					for pb.Next() {
+						if err := dec.Reset(bytes.NewReader(src)); err != nil {
+							b.Fatal(err)
+						}
+						if _, err := io.Copy(io.Discard, dec); err != nil {
+							b.Fatal(err)
+						}
+					}
+				})
+			})
+		}
 	}
 }
 

@@ -75,3 +75,36 @@ BenchmarkGSStore_Read/compression=none/30MiB  128.15        260.15  +103.00% (p=
 - Use `-test.count=10` for tighter confidence intervals on noisy networks.
 - Filter to a single benchmark with `-test.bench=BenchmarkGSStore_Read/client=grpc/compression=none`.
 - The emulator benchmark (`BenchmarkGSStore_Emulator_*`) requires `docker compose up -d fake-gcs` and `STORETESTS_GS_EMULATOR_STORE_URL=gs://store-tests`.
+
+## Zstd decoder concurrency (CPU-only)
+
+Isolates `WithDecoderConcurrency(1)` (dstore pooling) vs klauspost defaults. No GCS.
+
+```bash
+go test . -c -o zstd_bench.test
+./zstd_bench.test -test.bench=BenchmarkZstdDecoderConcurrency -test.run='^$' -test.benchmem -test.count=6 | tee zstd-conc.txt
+benchstat -col /conc zstd-conc.txt
+```
+
+`seq` is one stream; `par` is many concurrent streams (typical multi-object read).
+
+## Zstd decoder concurrency (GCS)
+
+Same comparison with the compressed stream still coming from GCS. Use compressible payloads so decode work is visible next to network.
+
+Cross-compile for a Linux amd64 node, copy the binary, then:
+
+```bash
+STORETESTS_GS_STORE_URL=gs://<bucket>/<prefix> \
+  ./gs_bench.test \
+    -test.bench=BenchmarkGSStore_ZstdDecoderConcurrency \
+    -test.run='^$' \
+    -test.benchtime=3x \
+    -test.count=6 \
+    -test.v \
+  | tee gcs-zstddec.txt
+
+benchstat -col /conc gcs-zstddec.txt
+```
+
+If decode is not the bottleneck, `conc=1` and `conc=default` will look the same; a gap means CPU decode is on the critical path.
