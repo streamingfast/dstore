@@ -174,7 +174,19 @@ func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
 
-	s.client = s3.NewFromConfig(cfg)
+	s.client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+		// Suppress flood of "Response has no supported checksum" warnings from the SDK.
+		// See https://github.com/aws/aws-sdk-go-v2/issues/3020
+		o.DisableLogOutputChecksumValidationSkipped = true
+
+		// Only compute request checksums when the operation requires it. As of
+		// service/s3 v1.73.0 the SDK computes CRC32 checksums on PUT/multipart by
+		// default, which breaks non-AWS S3-compatible backends (they reject the
+		// parts). This is the programmatic equivalent of setting the env var
+		// AWS_REQUEST_CHECKSUM_CALCULATION=when_required.
+		// See https://github.com/aws/aws-sdk-go-v2/discussions/2960
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+	})
 	s.uploader = manager.NewUploader(s.client)
 	s.downloader = manager.NewDownloader(s.client)
 	s.bucket = bucket
@@ -249,6 +261,10 @@ func ParseS3URL(s3URL *url.URL) (configOptions []func(*awsconfig.LoadOptions) er
 		))
 	}
 
+	if profile := s3URL.Query().Get("profile"); profile != "" {
+		configOptions = append(configOptions, awsconfig.WithSharedConfigProfile(profile))
+	}
+
 	return configOptions, bucket, strings.Trim(path, "/"), getStorageClass(s3URL.Query()), nil
 }
 
@@ -315,7 +331,11 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, met
 	}
 
 	if !s.overwrite && exists {
-		// We silently ignore when we ask not to overwrite
+		// We silently ignore when we ask not to overwrite, but we still must
+		// consume the reader so that pipe-based producers (e.g. an io.Pipe fed
+		// by a goroutine) don't block forever waiting for a consumer that
+		// will never come.
+		_, _ = io.Copy(io.Discard, f)
 		return nil
 	}
 

@@ -91,3 +91,15 @@ func TestParseS3URL(t *testing.T) {
 		})
 	}
 }
+
+func TestParseS3URL_Profile(t *testing.T) {
+	baseURL, err := url.Parse("s3://s3.example.com/my-bucket?region=us-east-1&profile=myprofile")
+	require.NoError(t, err)
+
+	configOptions, bucket, path, _, err := ParseS3URL(baseURL)
+	require.NoError(t, err)
+	assert.Equal(t, "my-bucket", bucket)
+	assert.Equal(t, "", path)
+	// profile adds one extra config option (region + endpoint + profile = 3)
+	assert.Equal(t, 3, len(configOptions))
+}
