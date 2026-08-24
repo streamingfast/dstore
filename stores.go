@@ -57,6 +57,16 @@ type Store interface {
 	// directories and reports them all, empty ones included.
 	ListFolders(ctx context.Context, prefix string, max int) ([]string, error)
 
+	// ListFoldersFromTo is ListFolders restricted to a slice of the key space: it returns only
+	// the folders whose path is at or after inclusiveFrom and strictly before exclusiveTo, both
+	// of which must start with prefix and either of which may be empty for "unbounded".
+	//
+	// A single folder listing is paged one round trip at a time however few folders come back,
+	// so a caller holding tens of thousands of them can split the key space and list the slices
+	// concurrently instead. Object stores push the bounds down to the service; the others
+	// filter what they listed.
+	ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error)
+
 	DeleteObject(ctx context.Context, base string) error
 
 	// Used to retrieve original query parameters, allowing further

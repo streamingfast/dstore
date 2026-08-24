@@ -715,13 +715,31 @@ func (s *S3Store) WalkAttributes(ctx context.Context, prefix string, f func(entr
 // ListFolders implements [FolderLister] with a delimited listing, which S3 answers with common
 // prefixes without ever walking the objects nested under them.
 func (s *S3Store) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
-	prefix = asFolderPrefix(prefix)
+	return s.ListFoldersFromTo(ctx, prefix, "", "", max)
+}
 
-	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+// ListFoldersFromTo starts the listing at the lower bound, which S3 honours server-side, and
+// stops at the upper one, which it has no parameter for.
+func (s *S3Store) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+	if err := checkFolderRange(prefix, inclusiveFrom, exclusiveTo); err != nil {
+		return nil, err
+	}
+
+	input := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(s.bucket),
 		Prefix:    aws.String(s.listingPrefix(prefix)),
 		Delimiter: aws.String("/"),
-	})
+	}
+	if inclusiveFrom != "" {
+		// StartAfter is exclusive, so back off one byte and let the filter below be exact.
+		relative := strings.TrimPrefix(inclusiveFrom, prefix)
+		if len(relative) > 1 {
+			input.StartAfter = aws.String(s.listingPrefix(prefix) + relative[0:len(relative)-1])
+		}
+	}
+
+	paginator := s3.NewListObjectsV2Paginator(s.client, input)
 
 	folders := newLimitedFolders(max)
 	if folders.full() {
@@ -740,7 +758,7 @@ func (s *S3Store) ListFolders(ctx context.Context, prefix string, max int) ([]st
 			}
 
 			folder := s.toBaseName(*commonPrefix.Prefix)
-			if folder == "" {
+			if folder == "" || !folderInRange(folder, inclusiveFrom, exclusiveTo) {
 				continue
 			}
 			if folders.full() {

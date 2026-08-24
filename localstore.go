@@ -340,7 +340,15 @@ func (s *LocalStore) WalkAttributes(ctx context.Context, prefix string, f func(e
 // ListFolders implements [FolderLister] by reading the single directory, which never descends
 // into the sub-directories it returns.
 func (s *LocalStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	return s.ListFoldersFromTo(ctx, prefix, "", "", max)
+}
+
+// ListFoldersFromTo filters the directory entries: a directory read takes no key bounds.
+func (s *LocalStore) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
 	prefix = asFolderPrefix(prefix)
+	if err := checkFolderRange(prefix, inclusiveFrom, exclusiveTo); err != nil {
+		return nil, err
+	}
 
 	entries, err := os.ReadDir(filepath.Join(s.basePath, filepath.FromSlash(prefix)))
 	if err != nil {
@@ -355,10 +363,15 @@ func (s *LocalStore) ListFolders(ctx context.Context, prefix string, max int) ([
 		if !entry.IsDir() {
 			continue
 		}
+
+		folder := prefix + entry.Name() + "/"
+		if !folderInRange(folder, inclusiveFrom, exclusiveTo) {
+			continue
+		}
 		if folders.full() {
 			break
 		}
-		folders.add(prefix + entry.Name() + "/")
+		folders.add(folder)
 	}
 
 	return folders.folders, nil

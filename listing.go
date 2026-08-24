@@ -2,6 +2,7 @@ package dstore
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -40,8 +41,11 @@ func commonWalkAttributes(store Store, ctx context.Context, prefix string, f fun
 // commonListFolders serves the stores that cannot list a single folder level, by walking
 // everything under prefix and keeping the distinct first segments. It returns the same folders
 // a native implementation would, at the cost of the full enumeration.
-func commonListFolders(store Store, ctx context.Context, prefix string, max int) ([]string, error) {
+func commonListFolders(store Store, ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
 	prefix = asFolderPrefix(prefix)
+	if err := checkFolderRange(prefix, inclusiveFrom, exclusiveTo); err != nil {
+		return nil, err
+	}
 
 	folders := newLimitedFolders(max)
 	if folders.full() {
@@ -61,6 +65,10 @@ func commonListFolders(store Store, ctx context.Context, prefix string, max int)
 		}
 		seen[folder] = true
 
+		if !folderInRange(folder, inclusiveFrom, exclusiveTo) {
+			return nil
+		}
+
 		folders.add(folder)
 		if folders.full() {
 			return StopIteration
@@ -72,6 +80,31 @@ func commonListFolders(store Store, ctx context.Context, prefix string, max int)
 	}
 
 	return folders.folders, nil
+}
+
+// folderInRange reports whether a folder falls in [inclusiveFrom, exclusiveTo). A folder ends
+// with a "/", which sorts before any other character a sibling name could continue with, so
+// comparing the paths directly gives the range the caller meant.
+func folderInRange(folder, inclusiveFrom, exclusiveTo string) bool {
+	if inclusiveFrom != "" && folder < inclusiveFrom {
+		return false
+	}
+	if exclusiveTo != "" && folder >= exclusiveTo {
+		return false
+	}
+	return true
+}
+
+// checkFolderRange rejects bounds that do not belong to the folder being listed, the same
+// contract WalkFromTo enforces.
+func checkFolderRange(prefix, inclusiveFrom, exclusiveTo string) error {
+	if inclusiveFrom != "" && !strings.HasPrefix(inclusiveFrom, prefix) {
+		return fmt.Errorf("inclusive from %q must start with prefix %q", inclusiveFrom, prefix)
+	}
+	if exclusiveTo != "" && !strings.HasPrefix(exclusiveTo, prefix) {
+		return fmt.Errorf("exclusive to %q must start with prefix %q", exclusiveTo, prefix)
+	}
+	return nil
 }
 
 // asFolderPrefix normalizes a folder path to the form the listings expect: either empty, or
