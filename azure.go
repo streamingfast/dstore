@@ -45,7 +45,13 @@ func newAzureStoreContext(_ context.Context, baseURL *url.URL, extension, compre
 		return nil, fmt.Errorf("specify azure account name and container like: az://account.container/path")
 	}
 
+	// AZURE_STORAGE_ENDPOINT points the client at an emulator (Azurite) or a private endpoint.
+	// Those serve the account from a path rather than a subdomain, which is why the account
+	// name is appended here and not woven into the host.
 	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
+	if endpoint := os.Getenv("AZURE_STORAGE_ENDPOINT"); endpoint != "" {
+		serviceURL = strings.TrimSuffix(endpoint, "/") + "/" + accountName + "/"
+	}
 
 	var client *azblob.Client
 
