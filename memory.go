@@ -3,10 +3,12 @@ package dstore
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -244,4 +246,79 @@ func newMemoryStoreContext(_ context.Context, baseURL *url.URL, extension, compr
 		data:        map[string][]byte{},
 		modified:    map[string]time.Time{},
 	}, nil
+}
+
+// WalkAttributes walks the objects held in memory. It reads the map directly rather than going
+// through Walk, which this store does not implement yet.
+func (m *MemoryStore) WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error {
+	m.lock.RLock()
+	entries := make([]ObjectEntry, 0, len(m.data))
+	for _, name := range m.sortedFiles() {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		entries = append(entries, ObjectEntry{
+			Name:         name,
+			Size:         int64(len(m.data[name])),
+			LastModified: m.modified[name],
+		})
+	}
+	m.lock.RUnlock()
+
+	for _, entry := range entries {
+		if err := f(entry); err != nil {
+			if errors.Is(err, StopIteration) {
+				return nil
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// sortedFiles returns the object names in lexicographic order, the order a listing would use.
+// The caller must hold the lock.
+func (m *MemoryStore) sortedFiles() []string {
+	names := make([]string, 0, len(m.data))
+	for name := range m.data {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	return names
+}
+
+// ListFolders returns the immediate sub-folders of prefix, reading them off the keys already
+// held in memory.
+func (m *MemoryStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+
+	folders := newLimitedFolders(max)
+	if folders.full() {
+		return folders.folders, nil
+	}
+
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	seen := map[string]bool{}
+	for _, name := range m.sortedFiles() {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+
+		folder, _, isFolder := strings.Cut(strings.TrimPrefix(name, prefix), "/")
+		if !isFolder || folder == "" || seen[folder] {
+			continue
+		}
+		seen[folder] = true
+
+		folders.add(prefix + folder + "/")
+		if folders.full() {
+			break
+		}
+	}
+
+	return folders.folders, nil
 }

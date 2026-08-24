@@ -19,6 +19,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 )
 
 type AzureStore struct {
@@ -401,4 +402,92 @@ func (s *AzureStore) toBaseName(filename string) string {
 // Helper function to create string pointers
 func toPtr(s string) *string {
 	return &s
+}
+
+// WalkAttributes implements [AttributeWalker]: the blob listing returns the size and the
+// modification time along with every name, so this costs exactly what Walk costs.
+func (s *AzureStore) WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error {
+	p := s.listingPrefix(prefix)
+
+	pager := s.client.NewListBlobsFlatPager(s.containerName, &azblob.ListBlobsFlatOptions{Prefix: &p})
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, blobItem := range page.Segment.BlobItems {
+			if blobItem.Name == nil {
+				continue
+			}
+
+			entry := ObjectEntry{Name: s.toBaseName(*blobItem.Name)}
+			if properties := blobItem.Properties; properties != nil {
+				if properties.ContentLength != nil {
+					entry.Size = *properties.ContentLength
+				}
+				if properties.LastModified != nil {
+					entry.LastModified = *properties.LastModified
+				}
+			}
+
+			if err := f(entry); err != nil {
+				if errors.Is(err, StopIteration) {
+					return nil
+				}
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// ListFolders implements [FolderLister] with a hierarchical listing, which Azure answers with
+// blob prefixes without ever walking the blobs nested under them.
+func (s *AzureStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	p := s.listingPrefix(asFolderPrefix(prefix))
+
+	folders := newLimitedFolders(max)
+
+	containerClient := s.client.ServiceClient().NewContainerClient(s.containerName)
+	pager := containerClient.NewListBlobsHierarchyPager("/", &container.ListBlobsHierarchyOptions{Prefix: &p})
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, blobPrefix := range page.Segment.BlobPrefixes {
+			if blobPrefix.Name == nil {
+				continue
+			}
+
+			folder := s.toBaseName(*blobPrefix.Name)
+			if folder == "" {
+				continue
+			}
+			if folders.full() {
+				return folders.folders, nil
+			}
+			folders.add(folder)
+		}
+	}
+
+	return folders.folders, nil
+}
+
+// listingPrefix turns a store-relative prefix into the absolute blob prefix the container
+// expects, keeping a trailing "/" that filepath.Join would eat.
+func (s *AzureStore) listingPrefix(prefix string) string {
+	p := strings.TrimLeft(s.baseURL.Path, "/") + "/"
+	if prefix == "" {
+		return p
+	}
+
+	p = path.Join(p, prefix)
+	if strings.HasSuffix(prefix, "/") {
+		p += "/"
+	}
+	return p
 }

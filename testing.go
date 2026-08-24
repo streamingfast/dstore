@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -29,10 +30,13 @@ type MockStore struct {
 	WalkFunc             func(ctx context.Context, prefix string, f func(filename string) error) error
 	WalkFromFunc         func(ctx context.Context, prefix, startingPoint string, f func(filename string) error) error
 	WalkFromToFunc       func(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) error) error
+	WalkAttributesFunc   func(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error
+	ListFoldersFunc      func(ctx context.Context, prefix string, max int) ([]string, error)
 	PushLocalFileFunc    func(ctx context.Context, localFile string, toBaseName string) (err error)
 
 	Files           map[string][]byte
 	Metadata        map[string]map[string]string
+	modified        map[string]time.Time
 	shouldOverwrite bool
 }
 
@@ -40,6 +44,7 @@ func NewMockStore(writeFunc func(base string, f io.Reader) (err error)) *MockSto
 	store := &MockStore{
 		Files:    make(map[string][]byte),
 		Metadata: make(map[string]map[string]string),
+		modified: make(map[string]time.Time),
 	}
 	if writeFunc != nil {
 		store.WriteObjectFunc = func(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) error {
@@ -148,6 +153,9 @@ func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader, m
 	}
 
 	zlog.Debug("writing object", zap.String("name", base))
+	if s.modified == nil {
+		s.modified = map[string]time.Time{}
+	}
 	content, exists := s.Files[base]
 	if !exists {
 		zlog.Debug("writing object not found, creating new one", zap.String("name", base))
@@ -167,6 +175,7 @@ func (s *MockStore) WriteObject(ctx context.Context, base string, f io.Reader, m
 	}
 
 	s.Files[base] = buffer.Bytes()
+	s.modified[base] = time.Now()
 
 	// Set metadata if provided
 	if len(metadataKeyValues) > 0 {
@@ -198,6 +207,7 @@ func (s *MockStore) DeleteObject(ctx context.Context, base string) error {
 
 	zlog.Debug("deleting object", zap.String("name", base))
 	delete(s.Files, base)
+	delete(s.modified, base)
 	delete(s.Metadata, base)
 	return nil
 }
@@ -232,9 +242,24 @@ func (s *MockStore) ObjectAttributes(ctx context.Context, base string) (*ObjectA
 	}
 
 	return &ObjectAttributes{
-		Size:     int64(len(content)),
-		Metadata: s.Metadata[base],
+		Size:         int64(len(content)),
+		Metadata:     s.Metadata[base],
+		LastModified: s.modified[base],
 	}, nil
+}
+
+func (s *MockStore) WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error {
+	if s.WalkAttributesFunc != nil {
+		return s.WalkAttributesFunc(ctx, prefix, f)
+	}
+	return commonWalkAttributes(s, ctx, prefix, f)
+}
+
+func (s *MockStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	if s.ListFoldersFunc != nil {
+		return s.ListFoldersFunc(ctx, prefix, max)
+	}
+	return commonListFolders(s, ctx, prefix, max)
 }
 
 func (s *MockStore) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {
