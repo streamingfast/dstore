@@ -381,3 +381,77 @@ func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 func (s *GSStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	return s.WalkFromTo(ctx, prefix, startingPoint, "", f)
 }
+
+// WalkAttributes implements [AttributeWalker]: Google Cloud Storage returns the size and the
+// modification time along with every name it lists, so this costs exactly what Walk costs.
+func (s *GSStore) WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error {
+	q, err := getGSWalkQuery(prefix, "", "", s.baseURL.Path)
+	if err != nil {
+		return err
+	}
+	q.SetAttrSelection([]string{"Name", "Size", "Updated"})
+
+	it := s.bucket().Objects(ctx, q)
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		entry := ObjectEntry{
+			Name:         s.toBaseName(attrs.Name),
+			Size:         attrs.Size,
+			LastModified: attrs.Updated,
+		}
+		if err := f(entry); err != nil {
+			if errors.Is(err, StopIteration) {
+				return nil
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ListFolders implements [FolderLister] with a delimited listing, which Google Cloud Storage
+// answers without ever walking the objects nested under the folders it returns.
+func (s *GSStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+
+	q, err := getGSWalkQuery(prefix, "", "", s.baseURL.Path)
+	if err != nil {
+		return nil, err
+	}
+	q.Delimiter = "/"
+	q.SetAttrSelection([]string{"Name"})
+
+	folders := newLimitedFolders(max)
+	if folders.full() {
+		return folders.folders, nil
+	}
+
+	it := s.bucket().Objects(ctx, q)
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if attrs.Prefix == "" {
+			continue // an object sitting directly in prefix, not a folder
+		}
+		if folders.full() {
+			break
+		}
+		folders.add(s.toBaseName(attrs.Prefix))
+	}
+
+	return folders.folders, nil
+}

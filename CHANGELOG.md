@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 
+### Added
+
+* `Store` gained `ListFolders(ctx, prefix, max)`, returning the immediate sub-folders of `prefix` (each relative to the store and ending with `/`) without reporting anything nested deeper. Object stores answer it with a single delimited listing that never looks at the objects below; `LocalStore` reads the one directory. A negative `max` means unlimited, and `prefix` is accepted with or without its trailing `/`.
+
+* `Store` gained `WalkAttributes(ctx, prefix, f)`, walking objects and yielding an `ObjectEntry` — name, size and modification time — instead of just the name. Every backend reads all three straight out of the listing it was already making, so this costs what `Walk` costs where `ObjectAttributes` per object used to be the only way to get them. It follows the same rules as `Walk`, `StopIteration` included.
+
+  Both are implemented natively by `GSStore`, `S3Store`, `AzureStore`, `LocalStore` and `MemoryStore`. `MockStore` is served by the generic `Walk`-based implementations, which return the same results at the usual cost.
+
+* Azure store: `AZURE_STORAGE_ENDPOINT` overrides the service URL, pointing the client at an emulator or a private endpoint instead of `<account>.blob.core.windows.net`. Unset, nothing changes.
+
+* Azurite service in `docker-compose.yml`, so the Azure store can be exercised locally without an Azure account, plus the matching `storetests` entry points.
+
 ### Fixed
 
 * S3 store: `WriteObject` now drains the input reader when skipping a write because the destination already exists and `overwrite` is disabled. Previously the reader was left untouched, which would deadlock pipe-based producers (e.g. a goroutine writing to an `io.Pipe`) and leak both the goroutine and any memory it had captured.

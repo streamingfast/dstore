@@ -107,6 +107,14 @@ func (s *LocalStore) WalkFromTo(ctx context.Context, prefix, startingPoint, excl
 }
 
 func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
+	return s.walk(ctx, prefix, func(infoPath string, info os.FileInfo) error {
+		return f(s.toBaseName(infoPath))
+	})
+}
+
+// walk is the traversal shared by Walk and WalkAttributes, handing the callback the
+// information filepath.Walk already gathered.
+func (s *LocalStore) walk(ctx context.Context, prefix string, f func(infoPath string, info os.FileInfo) error) error {
 	fullPath := s.basePath + "/"
 	if prefix != "" {
 		fullPath += prefix
@@ -146,7 +154,7 @@ func (s *LocalStore) Walk(ctx context.Context, prefix string, f func(filename st
 			return nil
 		}
 
-		if err := f(s.toBaseName(infoPath)); err != nil {
+		if err := f(infoPath, info); err != nil {
 			if errors.Is(err, StopIteration) {
 				return filepath.SkipAll
 			}
@@ -314,4 +322,44 @@ func randomString(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+// WalkAttributes implements [AttributeWalker]: the directory walk already stats every file, so
+// the size and the modification time come for free.
+func (s *LocalStore) WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error {
+	return s.walk(ctx, prefix, func(infoPath string, info os.FileInfo) error {
+		entry := ObjectEntry{
+			Name:         s.toBaseName(infoPath),
+			Size:         info.Size(),
+			LastModified: info.ModTime(),
+		}
+		return f(entry)
+	})
+}
+
+// ListFolders implements [FolderLister] by reading the single directory, which never descends
+// into the sub-directories it returns.
+func (s *LocalStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+
+	entries, err := os.ReadDir(filepath.Join(s.basePath, filepath.FromSlash(prefix)))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	folders := newLimitedFolders(max)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if folders.full() {
+			break
+		}
+		folders.add(prefix + entry.Name() + "/")
+	}
+
+	return folders.folders, nil
 }

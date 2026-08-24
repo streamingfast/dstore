@@ -12,6 +12,11 @@
 # Google Cloud Storage (fake-gcs-server):
 #   STORETESTS_GS_EMULATOR_STORE_URL="gs://store-tests"
 #   STORAGE_EMULATOR_HOST="localhost:4443"
+#
+# Azure Blob Storage (Azurite):
+#   STORETESTS_AZ_EMULATOR_STORE_URL="az://devstoreaccount1.store-tests"
+#   AZURE_STORAGE_ENDPOINT="http://localhost:10000"
+#   AZURE_STORAGE_KEY="Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
 
 services:
   # ── MinIO ────────────────────────────────────────────────────────────────────
@@ -64,6 +69,21 @@ services:
       timeout: 5s
       retries: 24
       start_period: 60s
+
+  # ── Azure Blob Storage (Azurite) ─────────────────────────────────────────────
+  #
+  # Uses the well-known Azurite development account. Point the store at it with
+  # AZURE_STORAGE_ENDPOINT and the matching AZURE_STORAGE_KEY.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    ports:
+      - "10000:10000"   # Blob service
+    command: azurite-blob --blobHost 0.0.0.0 --loose
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   # ── Google Cloud Storage (fake-gcs-server) ───────────────────────────────────
   #

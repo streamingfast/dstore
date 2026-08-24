@@ -40,7 +40,22 @@ type Store interface {
 	WalkFrom(ctx context.Context, prefix, inclusiveFrom string, f func(filename string) (err error)) error
 	WalkFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, f func(filename string) (err error)) error
 
+	// WalkAttributes walks like Walk, but yields the size and modification time the listing
+	// already carried instead of the name alone. It obeys the same rules as Walk, including
+	// StopIteration.
+	WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error
+
 	ListFiles(ctx context.Context, prefix string, max int) ([]string, error)
+
+	// ListFolders returns the immediate sub-folders of prefix, each relative to the store and
+	// ending with a "/", without reporting anything nested deeper. A negative max means
+	// unlimited. prefix is the empty string for the root of the store, and otherwise a folder
+	// path with or without its trailing "/".
+	//
+	// An object store has no folders of its own, only the prefixes its objects imply, so it
+	// reports exactly the folders that hold at least one object. LocalStore has real
+	// directories and reports them all, empty ones included.
+	ListFolders(ctx context.Context, prefix string, max int) ([]string, error)
 
 	DeleteObject(ctx context.Context, base string) error
 

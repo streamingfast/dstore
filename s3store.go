@@ -670,3 +670,103 @@ func (s *S3Store) PushLocalFile(ctx context.Context, localFile, toBaseName strin
 func (s *S3Store) ListFiles(ctx context.Context, prefix string, max int) ([]string, error) {
 	return listFiles(ctx, s, prefix, max)
 }
+
+// WalkAttributes implements [AttributeWalker]: ListObjectsV2 returns the size and the
+// modification time along with every key, so this costs exactly what Walk costs.
+func (s *S3Store) WalkAttributes(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error {
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(s.listingPrefix(prefix)),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("listing objects: %w", err)
+		}
+
+		for _, obj := range page.Contents {
+			filename := s.toBaseName(*obj.Key)
+			if filename == "" {
+				zlog.Debug("got an empty filename from s3 store, ignoring it", zap.String("key", *obj.Key))
+				continue
+			}
+
+			entry := ObjectEntry{Name: filename}
+			if obj.Size != nil {
+				entry.Size = *obj.Size
+			}
+			if obj.LastModified != nil {
+				entry.LastModified = *obj.LastModified
+			}
+
+			if err := f(entry); err != nil {
+				if errors.Is(err, StopIteration) {
+					return nil
+				}
+				return fmt.Errorf("processing object list: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ListFolders implements [FolderLister] with a delimited listing, which S3 answers with common
+// prefixes without ever walking the objects nested under them.
+func (s *S3Store) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket:    aws.String(s.bucket),
+		Prefix:    aws.String(s.listingPrefix(prefix)),
+		Delimiter: aws.String("/"),
+	})
+
+	folders := newLimitedFolders(max)
+	if folders.full() {
+		return folders.folders, nil
+	}
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("listing folders: %w", err)
+		}
+
+		for _, commonPrefix := range page.CommonPrefixes {
+			if commonPrefix.Prefix == nil {
+				continue
+			}
+
+			folder := s.toBaseName(*commonPrefix.Prefix)
+			if folder == "" {
+				continue
+			}
+			if folders.full() {
+				return folders.folders, nil
+			}
+			folders.add(folder)
+		}
+	}
+
+	return folders.folders, nil
+}
+
+// listingPrefix turns a store-relative prefix into the absolute key prefix the bucket expects,
+// keeping a trailing "/" that filepath.Join would eat.
+func (s *S3Store) listingPrefix(prefix string) string {
+	targetPrefix := s.path
+	if targetPrefix != "" {
+		targetPrefix += "/"
+	}
+	if prefix == "" {
+		return targetPrefix
+	}
+
+	targetPrefix = path.Join(targetPrefix, prefix)
+	if strings.HasSuffix(prefix, "/") {
+		targetPrefix += "/"
+	}
+	return targetPrefix
+}
