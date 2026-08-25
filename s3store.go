@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -563,22 +564,17 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 		// "original prefix" from the "startingPoint" and append it to the real "final" prefix instead.
 		relativeStartingPoint := strings.TrimPrefix(startingPoint, prefix)
 
-		// to match 'helloworld.html' by using startAfter, we use 'helloworld.htm' (and we filter again in the walk function  to filter out 'helloworld.htm0')
-		if len(relativeStartingPoint) > 1 {
-			rightBeforeStartingPoint := relativeStartingPoint[0 : len(relativeStartingPoint)-1]
-			startAfter := targetPrefix + rightBeforeStartingPoint
-
-			// StartAfter is also known as 'marker' within S3 compatible layer
+		// StartAfter is exclusive, so it gets the key right before the starting point:
+		// 'helloworld.html' is walked from 'helloworld.htmk'. The walk still filters, because
+		// keys between the two ('helloworld.htmk0') are returned by that bound.
+		// StartAfter is also known as 'marker' within S3 compatible layer
+		if startAfter := keyBefore(targetPrefix + relativeStartingPoint); startAfter != "" {
 			input.StartAfter = aws.String(startAfter)
 		}
 	}
 
-	var relativeEndPoint string
-	if exclusiveEndPoint != "" {
-		if !strings.HasPrefix(exclusiveEndPoint, prefix) {
-			return fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
-		}
-		relativeEndPoint = strings.TrimPrefix(exclusiveEndPoint, prefix)
+	if exclusiveEndPoint != "" && !strings.HasPrefix(exclusiveEndPoint, prefix) {
+		return fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
 	}
 
 	if tracer.Enabled() {
@@ -603,7 +599,8 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 			if startingPoint != "" && filename < startingPoint {
 				continue
 			}
-			if relativeEndPoint != "" && filename >= relativeEndPoint {
+			// Keys come back sorted, so the first one at or past the bound ends the whole listing.
+			if exclusiveEndPoint != "" && filename >= exclusiveEndPoint {
 				return nil
 			}
 
@@ -621,6 +618,31 @@ func (s *S3Store) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 
 func (s *S3Store) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
 	return s.WalkFrom(ctx, prefix, "", f)
+}
+
+// keyBefore returns the largest key that sorts before target, as far as one rune can take it:
+// the last rune is decremented, or dropped when there is nothing below it. The result is the
+// tightest StartAfter that still returns target itself, and it stays valid UTF-8, which a bare
+// byte decrement would not.
+func keyBefore(target string) string {
+	if target == "" {
+		return ""
+	}
+
+	lastRune, size := utf8.DecodeLastRuneInString(target)
+	head := target[0 : len(target)-size]
+	if lastRune == utf8.RuneError && size <= 1 {
+		return head // not valid UTF-8, the whole rune goes
+	}
+	if lastRune <= ' ' {
+		return head
+	}
+
+	previous := lastRune - 1
+	if previous == 0xDFFF {
+		previous = 0xD7FF // surrogates are not valid runes
+	}
+	return head + string(previous)
 }
 
 func (s *S3Store) toBaseName(filename string) string {
@@ -732,10 +754,10 @@ func (s *S3Store) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, 
 		Delimiter: aws.String("/"),
 	}
 	if inclusiveFrom != "" {
-		// StartAfter is exclusive, so back off one byte and let the filter below be exact.
-		relative := strings.TrimPrefix(inclusiveFrom, prefix)
-		if len(relative) > 1 {
-			input.StartAfter = aws.String(s.listingPrefix(prefix) + relative[0:len(relative)-1])
+		// StartAfter is exclusive, and every folder key ends with a "/", so dropping that "/"
+		// gives the largest key the service may skip while still returning the folder itself.
+		if startAfter := strings.TrimSuffix(s.listingPrefix(prefix)+strings.TrimPrefix(inclusiveFrom, prefix), "/"); startAfter != "" {
+			input.StartAfter = aws.String(startAfter)
 		}
 	}
 
@@ -758,7 +780,14 @@ func (s *S3Store) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, 
 			}
 
 			folder := s.toBaseName(*commonPrefix.Prefix)
-			if folder == "" || !folderInRange(folder, inclusiveFrom, exclusiveTo) {
+			if folder == "" {
+				continue
+			}
+			// Common prefixes come back sorted, so the first one at or past the bound ends the listing.
+			if exclusiveTo != "" && folder >= exclusiveTo {
+				return folders.folders, nil
+			}
+			if !folderInRange(folder, inclusiveFrom, exclusiveTo) {
 				continue
 			}
 			if folders.full() {

@@ -342,8 +342,7 @@ func getGSWalkQuery(prefix, startingPoint, exclusiveEndPoint, baseURLPath string
 			return nil, fmt.Errorf("exclusive end point %q must start with prefix %q", exclusiveEndPoint, prefix)
 		}
 		// same adjustment as above
-		relativeEndPoint := strings.TrimPrefix(exclusiveEndPoint, prefix)
-		q.EndOffset = filepath.Join(q.Prefix, relativeEndPoint)
+		q.EndOffset = q.Prefix + strings.TrimPrefix(exclusiveEndPoint, prefix)
 	}
 	return q, nil
 

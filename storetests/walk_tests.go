@@ -17,6 +17,8 @@ var walkTests = []StoreTestFunc{
 	TestWalk_PathPrefix,
 	TestWalkFrom,
 	TestWalkFromTo,
+	TestWalkFromTo_WithPrefix,
+	TestWalkFromTo_FolderEndPoint,
 	TestWalkFrom_WithPrefix,
 	TestWalkFrom_SingleLetterStartingPoint,
 	TestWalkFrom_StartingPointHasWrongPrefix,
@@ -151,6 +153,46 @@ func TestWalkFromTo(t *testing.T, factory StoreFactory) {
 
 	require.NoError(t, err)
 	assert.EqualValues(t, expected, seen)
+}
+
+// Both bounds are relative to the store, not to the prefix, exactly like the names the walk
+// yields. A store comparing them against prefix-stripped names walks past the end point.
+func TestWalkFromTo_WithPrefix(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, f := range []string{"0000/0001", "0000/0002", "0000/0003", "0000/0004", "0001/0001"} {
+		addFileToStore(t, store, f, f)
+	}
+
+	var seen []string
+	err := store.WalkFromTo(ctx, "0000/", "0000/0002", "0000/0004", func(f string) error {
+		seen = append(seen, f)
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.EqualValues(t, []string{"0000/0002", "0000/0003"}, seen)
+}
+
+// An end point naming a folder must keep the object named after that folder, which sorts
+// before it, in range.
+func TestWalkFromTo_FolderEndPoint(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, f := range []string{"alpha", "beta"} {
+		addFileToStore(t, store, f, f)
+	}
+
+	var seen []string
+	err := store.WalkFromTo(ctx, "", "a", "alpha/", func(f string) error {
+		seen = append(seen, f)
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.EqualValues(t, []string{"alpha"}, seen)
 }
 
 func TestWalk_PathPrefix(t *testing.T, factory StoreFactory) {

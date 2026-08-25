@@ -20,6 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+* S3 and Azure stores: `ListFoldersFromTo` now stops paging as soon as the exclusive upper bound is reached, instead of listing the rest of the prefix to discard it. `S3Store.WalkFromTo` does the same, and compares the bound against the full name rather than a prefix-stripped one, which made it yield keys past the bound whenever `prefix` was non-empty.
+
+* S3 store: `WalkFromTo` starts the server-side scan at the key right before the starting point (`helloworld.html` is walked from `helloworld.htmk`) instead of the starting point with its last character cut off (`helloworld.htm`), which had the service send every key in between for the walk to filter out. On fixed-width keys such as block numbers that window held every key sharing the truncated stem; it now holds none. A one-character bound used to cut off to the prefix itself and was skipped altogether, so it pushed nothing down at all.
+
+* S3 store: `ListFoldersFromTo` pushes its lower bound down whole, minus the trailing `/` that makes it exclusive, where it used to drop the last character of the bound and skip it altogether when a single character was left. Listing `chain/` from `chain/b/` now starts the server-side scan at `chain/b` instead of walking `chain/a*` and filtering it out.
+
+* GS store: the exclusive end point of `WalkFromTo` keeps its trailing `/` in the listing's end offset. `filepath.Join` ate it, so walking up to `some/folder/` skipped the object named `some/folder`, which sorts before the bound.
+
 * S3 store: `WriteObject` now drains the input reader when skipping a write because the destination already exists and `overwrite` is disabled. Previously the reader was left untouched, which would deadlock pipe-based producers (e.g. a goroutine writing to an `io.Pipe`) and leak both the goroutine and any memory it had captured.
 
 * S3 store: suppress checksum validation warnings from the SDK by setting `DisableLogOutputChecksumValidationSkipped` to `true`.

@@ -2,6 +2,9 @@ package dstore
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGSStore_calculateStartOffset(t *testing.T) {
@@ -115,6 +118,52 @@ func TestGSStore_calculateStartOffset(t *testing.T) {
 			if query.StartOffset != tt.expectedOffset {
 				t.Errorf("Expected offset %q, got %q", tt.expectedOffset, query.StartOffset)
 			}
+		})
+	}
+}
+
+func TestGSStore_calculateEndOffset(t *testing.T) {
+	tests := []struct {
+		name              string
+		prefix            string
+		exclusiveEndPoint string
+		baseURLPath       string
+		expectedEndOffset string
+	}{
+		{
+			name:              "no end point",
+			prefix:            "chain/",
+			baseURLPath:       "/root",
+			expectedEndOffset: "",
+		},
+		{
+			name:              "end point below the prefix",
+			prefix:            "chain/",
+			exclusiveEndPoint: "chain/0000000100",
+			baseURLPath:       "/root",
+			expectedEndOffset: "root/chain/0000000100",
+		},
+		{
+			name:              "end point keeps its trailing slash, so the key without it stays in range",
+			prefix:            "chain/",
+			exclusiveEndPoint: "chain/sub/",
+			baseURLPath:       "/root",
+			expectedEndOffset: "root/chain/sub/",
+		},
+		{
+			name:              "end point on a store without a path",
+			prefix:            "",
+			exclusiveEndPoint: "sub/",
+			baseURLPath:       "/",
+			expectedEndOffset: "sub/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query, err := getGSWalkQuery(tt.prefix, "", tt.exclusiveEndPoint, tt.baseURLPath)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedEndOffset, query.EndOffset)
 		})
 	}
 }
