@@ -480,7 +480,14 @@ func (s *AzureStore) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFro
 			}
 
 			folder := s.toBaseName(*blobPrefix.Name)
-			if folder == "" || !folderInRange(folder, inclusiveFrom, exclusiveTo) {
+			if folder == "" {
+				continue
+			}
+			// Blob prefixes come back sorted, so the first one at or past the bound ends the listing.
+			if exclusiveTo != "" && folder >= exclusiveTo {
+				return folders.folders, nil
+			}
+			if !folderInRange(folder, inclusiveFrom, exclusiveTo) {
 				continue
 			}
 			if folders.full() {

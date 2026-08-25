@@ -26,6 +26,7 @@ var listingTests = []StoreTestFunc{
 	TestListFoldersFromTo_Slices,
 	TestListFoldersFromTo_Bounds,
 	TestListFoldersFromTo_UnderPrefix,
+	TestListFoldersFromTo_SingleCharacterBounds,
 	TestListFoldersFromTo_Max,
 	TestListFoldersFromTo_BoundsMustMatchPrefix,
 }
@@ -246,6 +247,25 @@ func TestListFoldersFromTo_UnderPrefix(t *testing.T, factory StoreFactory) {
 	folders, err := store.ListFoldersFromTo(ctx, "alpha/", "alpha/three", "alpha/tx", unlimited)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"alpha/three/", "alpha/two/"}, folders)
+}
+
+// A bound one character past the prefix is the tightest a caller can give, and the one a store
+// pushing it down server-side is most likely to get wrong.
+func TestListFoldersFromTo_SingleCharacterBounds(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, name := range []string{"a", "b", "c"} {
+		addFileToStore(t, store, "alpha/"+name+"/0000001", name)
+	}
+
+	folders, err := store.ListFoldersFromTo(ctx, "alpha/", "alpha/b", "alpha/c", unlimited)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"alpha/b/"}, folders)
+
+	withSlashes, err := store.ListFoldersFromTo(ctx, "alpha/", "alpha/b/", "alpha/c/", unlimited)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"alpha/b/"}, withSlashes)
 }
 
 func TestListFoldersFromTo_Max(t *testing.T, factory StoreFactory) {
