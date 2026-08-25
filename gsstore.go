@@ -420,9 +420,18 @@ func (s *GSStore) WalkAttributes(ctx context.Context, prefix string, f func(entr
 // ListFolders implements [FolderLister] with a delimited listing, which Google Cloud Storage
 // answers without ever walking the objects nested under the folders it returns.
 func (s *GSStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
-	prefix = asFolderPrefix(prefix)
+	return s.ListFoldersFromTo(ctx, prefix, "", "", max)
+}
 
-	q, err := getGSWalkQuery(prefix, "", "", s.baseURL.Path)
+// ListFoldersFromTo pushes the bounds down as the listing's start and end offsets, so the
+// service only walks the slice of the key space that was asked for.
+func (s *GSStore) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+	if err := checkFolderRange(prefix, inclusiveFrom, exclusiveTo); err != nil {
+		return nil, err
+	}
+
+	q, err := getGSWalkQuery(prefix, inclusiveFrom, exclusiveTo, s.baseURL.Path)
 	if err != nil {
 		return nil, err
 	}

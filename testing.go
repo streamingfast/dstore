@@ -19,20 +19,21 @@ import (
 )
 
 type MockStore struct {
-	OpenObjectFunc       func(ctx context.Context, name string) (out io.ReadCloser, err error)
-	WriteObjectFunc      func(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) error
-	CopyObjectFunc       func(ctx context.Context, src, dest string) error
-	DeleteObjectFunc     func(ctx context.Context, base string) error
-	FileExistsFunc       func(ctx context.Context, base string) (bool, error)
-	ObjectAttributesFunc func(ctx context.Context, base string) (*ObjectAttributes, error)
-	SetMetadataFunc      func(ctx context.Context, base string, metadata map[string]string) error
-	ListFilesFunc        func(ctx context.Context, prefix string, max int) ([]string, error)
-	WalkFunc             func(ctx context.Context, prefix string, f func(filename string) error) error
-	WalkFromFunc         func(ctx context.Context, prefix, startingPoint string, f func(filename string) error) error
-	WalkFromToFunc       func(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) error) error
-	WalkAttributesFunc   func(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error
-	ListFoldersFunc      func(ctx context.Context, prefix string, max int) ([]string, error)
-	PushLocalFileFunc    func(ctx context.Context, localFile string, toBaseName string) (err error)
+	OpenObjectFunc        func(ctx context.Context, name string) (out io.ReadCloser, err error)
+	WriteObjectFunc       func(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) error
+	CopyObjectFunc        func(ctx context.Context, src, dest string) error
+	DeleteObjectFunc      func(ctx context.Context, base string) error
+	FileExistsFunc        func(ctx context.Context, base string) (bool, error)
+	ObjectAttributesFunc  func(ctx context.Context, base string) (*ObjectAttributes, error)
+	SetMetadataFunc       func(ctx context.Context, base string, metadata map[string]string) error
+	ListFilesFunc         func(ctx context.Context, prefix string, max int) ([]string, error)
+	WalkFunc              func(ctx context.Context, prefix string, f func(filename string) error) error
+	WalkFromFunc          func(ctx context.Context, prefix, startingPoint string, f func(filename string) error) error
+	WalkFromToFunc        func(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) error) error
+	WalkAttributesFunc    func(ctx context.Context, prefix string, f func(entry ObjectEntry) error) error
+	ListFoldersFunc       func(ctx context.Context, prefix string, max int) ([]string, error)
+	ListFoldersFromToFunc func(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error)
+	PushLocalFileFunc     func(ctx context.Context, localFile string, toBaseName string) (err error)
 
 	Files           map[string][]byte
 	Metadata        map[string]map[string]string
@@ -259,7 +260,14 @@ func (s *MockStore) ListFolders(ctx context.Context, prefix string, max int) ([]
 	if s.ListFoldersFunc != nil {
 		return s.ListFoldersFunc(ctx, prefix, max)
 	}
-	return commonListFolders(s, ctx, prefix, max)
+	return commonListFolders(s, ctx, prefix, "", "", max)
+}
+
+func (s *MockStore) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
+	if s.ListFoldersFromToFunc != nil {
+		return s.ListFoldersFromToFunc(ctx, prefix, inclusiveFrom, exclusiveTo, max)
+	}
+	return commonListFolders(s, ctx, prefix, inclusiveFrom, exclusiveTo, max)
 }
 
 func (s *MockStore) SetMetadata(ctx context.Context, base string, metadata map[string]string) error {

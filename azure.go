@@ -452,7 +452,17 @@ func (s *AzureStore) WalkAttributes(ctx context.Context, prefix string, f func(e
 // ListFolders implements [FolderLister] with a hierarchical listing, which Azure answers with
 // blob prefixes without ever walking the blobs nested under them.
 func (s *AzureStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
-	p := s.listingPrefix(asFolderPrefix(prefix))
+	return s.ListFoldersFromTo(ctx, prefix, "", "", max)
+}
+
+// ListFoldersFromTo filters the listed folders: the Azure listing takes no key bounds.
+func (s *AzureStore) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
+	prefix = asFolderPrefix(prefix)
+	if err := checkFolderRange(prefix, inclusiveFrom, exclusiveTo); err != nil {
+		return nil, err
+	}
+
+	p := s.listingPrefix(prefix)
 
 	folders := newLimitedFolders(max)
 
@@ -470,7 +480,7 @@ func (s *AzureStore) ListFolders(ctx context.Context, prefix string, max int) ([
 			}
 
 			folder := s.toBaseName(*blobPrefix.Name)
-			if folder == "" {
+			if folder == "" || !folderInRange(folder, inclusiveFrom, exclusiveTo) {
 				continue
 			}
 			if folders.full() {

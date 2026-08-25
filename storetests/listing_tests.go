@@ -23,6 +23,11 @@ var listingTests = []StoreTestFunc{
 	TestWalkAttributes_MatchesWalk,
 	TestWalkAttributes_StopIteration,
 	TestWalkAttributes_IgnoreNotFound,
+	TestListFoldersFromTo_Slices,
+	TestListFoldersFromTo_Bounds,
+	TestListFoldersFromTo_UnderPrefix,
+	TestListFoldersFromTo_Max,
+	TestListFoldersFromTo_BoundsMustMatchPrefix,
 }
 
 // The listing helpers must answer the same thing on every store, whether the store implements
@@ -184,4 +189,88 @@ func TestWalkAttributes_IgnoreNotFound(t *testing.T, factory StoreFactory) {
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+// A ranged folder listing must tile: splitting the key space and concatenating the slices has
+// to give back exactly what the unrestricted listing gives, on every backend.
+
+func TestListFoldersFromTo_Slices(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, name := range []string{"a1", "b2", "c3", "d4"} {
+		addFileToStore(t, store, name+"/0000001", name)
+	}
+
+	all, err := store.ListFolders(ctx, "", unlimited)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a1/", "b2/", "c3/", "d4/"}, all)
+
+	lower, err := store.ListFoldersFromTo(ctx, "", "", "c", unlimited)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a1/", "b2/"}, lower)
+
+	upper, err := store.ListFoldersFromTo(ctx, "", "c", "", unlimited)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"c3/", "d4/"}, upper)
+
+	assert.ElementsMatch(t, all, append(lower, upper...), "the slices must tile the whole listing")
+}
+
+func TestListFoldersFromTo_Bounds(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, name := range []string{"aa", "bb", "cc"} {
+		addFileToStore(t, store, name+"/0000001", name)
+	}
+
+	// inclusiveFrom includes its own folder, exclusiveTo excludes it.
+	folders, err := store.ListFoldersFromTo(ctx, "", "bb", "cc", unlimited)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"bb/"}, folders)
+
+	empty, err := store.ListFoldersFromTo(ctx, "", "bb", "bb", unlimited)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+}
+
+func TestListFoldersFromTo_UnderPrefix(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, name := range []string{"one", "two", "three"} {
+		addFileToStore(t, store, "alpha/"+name+"/0000001", name)
+	}
+
+	folders, err := store.ListFoldersFromTo(ctx, "alpha/", "alpha/three", "alpha/tx", unlimited)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"alpha/three/", "alpha/two/"}, folders)
+}
+
+func TestListFoldersFromTo_Max(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	for _, name := range []string{"a1", "b2", "c3"} {
+		addFileToStore(t, store, name+"/0000001", name)
+	}
+
+	folders, err := store.ListFoldersFromTo(ctx, "", "", "", 2)
+	require.NoError(t, err)
+	assert.Len(t, folders, 2)
+}
+
+// The bounds must belong to the folder being listed, the same contract WalkFromTo enforces.
+func TestListFoldersFromTo_BoundsMustMatchPrefix(t *testing.T, factory StoreFactory) {
+	store, _, cleanup := factory()
+	defer cleanup()
+
+	addFileToStore(t, store, "alpha/one/0000001", "one")
+
+	_, err := store.ListFoldersFromTo(ctx, "alpha/", "beta/x", "", unlimited)
+	require.Error(t, err)
+
+	_, err = store.ListFoldersFromTo(ctx, "alpha/", "", "beta/x", unlimited)
+	require.Error(t, err)
 }

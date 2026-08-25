@@ -292,7 +292,15 @@ func (m *MemoryStore) sortedFiles() []string {
 // ListFolders returns the immediate sub-folders of prefix, reading them off the keys already
 // held in memory.
 func (m *MemoryStore) ListFolders(ctx context.Context, prefix string, max int) ([]string, error) {
+	return m.ListFoldersFromTo(ctx, prefix, "", "", max)
+}
+
+// ListFoldersFromTo filters the keys held in memory.
+func (m *MemoryStore) ListFoldersFromTo(ctx context.Context, prefix, inclusiveFrom, exclusiveTo string, max int) ([]string, error) {
 	prefix = asFolderPrefix(prefix)
+	if err := checkFolderRange(prefix, inclusiveFrom, exclusiveTo); err != nil {
+		return nil, err
+	}
 
 	folders := newLimitedFolders(max)
 	if folders.full() {
@@ -313,6 +321,10 @@ func (m *MemoryStore) ListFolders(ctx context.Context, prefix string, max int) (
 			continue
 		}
 		seen[folder] = true
+
+		if !folderInRange(prefix+folder+"/", inclusiveFrom, exclusiveTo) {
+			continue
+		}
 
 		folders.add(prefix + folder + "/")
 		if folders.full() {

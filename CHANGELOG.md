@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+* `Store` gained `ListFoldersFromTo(ctx, prefix, inclusiveFrom, exclusiveTo, max)`, `ListFolders` restricted to a slice of the key space. A single folder listing is paged one round trip at a time however few folders come back, so a caller holding tens of thousands of them can now split the key space and list the slices concurrently: on a Google Cloud Storage folder holding 39k sub-folders that takes the listing from 8.2s to 1.1s. `GSStore` pushes both bounds down as the listing's start and end offsets and `S3Store` pushes the lower one down as `StartAfter`; the others filter what they listed. The bounds must start with `prefix`, the same contract `WalkFromTo` enforces.
+
 * `Store` gained `ListFolders(ctx, prefix, max)`, returning the immediate sub-folders of `prefix` (each relative to the store and ending with `/`) without reporting anything nested deeper. Object stores answer it with a single delimited listing that never looks at the objects below; `LocalStore` reads the one directory. A negative `max` means unlimited, and `prefix` is accepted with or without its trailing `/`.
 
 * `Store` gained `WalkAttributes(ctx, prefix, f)`, walking objects and yielding an `ObjectEntry` — name, size and modification time — instead of just the name. Every backend reads all three straight out of the listing it was already making, so this costs what `Walk` costs where `ObjectAttributes` per object used to be the only way to get them. It follows the same rules as `Walk`, `StopIteration` included.
