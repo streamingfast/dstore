@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,43 +26,77 @@ type s3CopyMockRequest struct {
 	path   string
 	query  url.Values
 	header http.Header
+	body   string
 }
 
 // s3CopyMockTransport answers the calls a server-side copy makes — the head of the source,
 // then either the single copy or the multipart sequence — and records each of them so a test
-// can assert on the source, the ranges and the storage class the store asked for.
+// can assert on the source, the ranges and the storage class the store asked for. Setting
+// copyErrorCode makes every copy call fail instead, which is what drives the store onto its
+// streaming fallback.
 type s3CopyMockTransport struct {
-	sourceSize int64
-	requests   []s3CopyMockRequest
+	sourceContent   string
+	sourceSize      int64
+	copyErrorStatus int
+	copyErrorCode   string
+
+	requests []s3CopyMockRequest
 }
 
 func (t *s3CopyMockTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	query := request.URL.Query()
-	t.requests = append(t.requests, s3CopyMockRequest{
+	recorded := s3CopyMockRequest{
 		method: request.Method,
 		path:   request.URL.Path,
 		query:  query,
 		header: request.Header.Clone(),
-	})
+	}
+	if request.Body != nil {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			return nil, err
+		}
+		recorded.body = string(body)
+	}
+	t.requests = append(t.requests, recorded)
 
-	xml := func(body string) (*http.Response, error) {
+	respond := func(status int, contentType, body string) (*http.Response, error) {
 		return &http.Response{
-			StatusCode: 200,
-			Header:     http.Header{"Content-Type": []string{"application/xml"}},
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Request:    request,
+			StatusCode:    status,
+			Header:        http.Header{"Content-Type": []string{contentType}, "ETag": []string{`"etag"`}},
+			ContentLength: int64(len(body)),
+			Body:          io.NopCloser(strings.NewReader(body)),
+			Request:       request,
 		}, nil
+	}
+	xml := func(body string) (*http.Response, error) {
+		return respond(200, "application/xml", body)
+	}
+	isCopy := recorded.header.Get("x-amz-copy-source") != ""
+	if isCopy && t.copyErrorCode != "" {
+		return respond(t.copyErrorStatus, "application/xml",
+			`<Error><Code>`+t.copyErrorCode+`</Code><Message>mocked</Message></Error>`)
 	}
 
 	switch {
 	case request.Method == http.MethodHead:
+		size := t.sourceSize
+		if t.sourceContent != "" {
+			size = int64(len(t.sourceContent))
+		}
 		return &http.Response{
 			StatusCode:    200,
-			Header:        http.Header{"Content-Length": []string{strconv.FormatInt(t.sourceSize, 10)}},
-			ContentLength: t.sourceSize,
+			Header:        http.Header{"Content-Length": []string{strconv.FormatInt(size, 10)}},
+			ContentLength: size,
 			Body:          http.NoBody,
 			Request:       request,
 		}, nil
+
+	case request.Method == http.MethodGet:
+		return respond(200, "application/octet-stream", t.sourceContent)
+
+	case request.Method == http.MethodDelete:
+		return respond(204, "application/xml", "")
 
 	case request.Method == http.MethodPost && query.Has("uploads"):
 		return xml(`<InitiateMultipartUploadResult><Bucket>bucket</Bucket><UploadId>upload-id</UploadId></InitiateMultipartUploadResult>`)
@@ -72,8 +107,11 @@ func (t *s3CopyMockTransport) RoundTrip(request *http.Request) (*http.Response, 
 	case request.Method == http.MethodPut && query.Has("partNumber"):
 		return xml(`<CopyPartResult><ETag>"part-` + query.Get("partNumber") + `"</ETag></CopyPartResult>`)
 
-	case request.Method == http.MethodPut:
+	case request.Method == http.MethodPut && isCopy:
 		return xml(`<CopyObjectResult><ETag>"copied"</ETag></CopyObjectResult>`)
+
+	case request.Method == http.MethodPut:
+		return respond(200, "application/xml", "")
 	}
 
 	return nil, fmt.Errorf("unexpected request %s %q", request.Method, request.URL)
@@ -100,6 +138,7 @@ func newMockedS3CopyStore(t *testing.T, sourceSize int64, storageClass string) (
 		path:         "root",
 		storageClass: storageClass,
 		client:       client,
+		uploader:     manager.NewUploader(client),
 		commonStore:  &commonStore{overwrite: true},
 	}, transport
 }
@@ -118,7 +157,7 @@ func TestS3StoreCopyObject_SingleCall(t *testing.T) {
 	copied := transport.requests[1]
 	assert.Equal(t, http.MethodPut, copied.method)
 	assert.Equal(t, "/bucket/root/to", copied.path)
-	assert.Equal(t, url.PathEscape("bucket/root/from"), copied.header.Get("x-amz-copy-source"))
+	assert.Equal(t, "bucket/root/from", copied.header.Get("x-amz-copy-source"))
 	assert.Equal(t, "GLACIER", copied.header.Get("x-amz-storage-class"))
 	assert.Empty(t, copied.header.Get("x-amz-metadata-directive"), "the directive defaults to COPY so the metadata of the source carries over")
 }
@@ -149,13 +188,91 @@ func TestS3StoreCopyObject_Multipart(t *testing.T) {
 		assert.Equal(t, "/bucket/root/to", part.path)
 		assert.Equal(t, strconv.Itoa(i+1), part.query.Get("partNumber"))
 		assert.Equal(t, "upload-id", part.query.Get("uploadId"))
-		assert.Equal(t, url.PathEscape("bucket/root/from"), part.header.Get("x-amz-copy-source"))
+		assert.Equal(t, "bucket/root/from", part.header.Get("x-amz-copy-source"))
 		assert.Equal(t, expectedRange, part.header.Get("x-amz-copy-source-range"))
 	}
 
 	complete := transport.requests[5]
 	assert.Equal(t, http.MethodPost, complete.method)
 	assert.Equal(t, "upload-id", complete.query.Get("uploadId"))
+}
+
+func TestS3StoreCopyObject_CopySourceEscaping(t *testing.T) {
+	store, transport := newMockedS3CopyStore(t, 1024, "")
+
+	require.NoError(t, store.CopyObject(context.Background(), "a folder/an object", "to"))
+
+	require.Len(t, transport.requests, 2)
+	assert.Equal(t, "bucket/root/a%20folder/an%20object", transport.requests[1].header.Get("x-amz-copy-source"),
+		"the slashes separating the segments stay literal, only what is special within a segment is escaped")
+}
+
+func TestS3StoreCopyObject_FallsBackWhenCopyIsNotImplemented(t *testing.T) {
+	store, transport := newMockedS3CopyStore(t, 0, "")
+	transport.sourceContent = "the object content"
+	transport.copyErrorStatus, transport.copyErrorCode = 501, "NotImplemented"
+
+	require.NoError(t, store.CopyObject(context.Background(), "from", "to"))
+
+	var uploads int
+	for _, request := range transport.requests {
+		if request.method == http.MethodPut && request.header.Get("x-amz-copy-source") == "" {
+			uploads++
+			assert.Equal(t, "/bucket/root/to", request.path)
+			assert.Equal(t, transport.sourceContent, request.body)
+		}
+	}
+	assert.Equal(t, 1, uploads, "the object should have been written through the client")
+
+	var reads int
+	for _, request := range transport.requests {
+		if request.method == http.MethodGet {
+			reads++
+			assert.Equal(t, "/bucket/root/from", request.path)
+		}
+	}
+	assert.Equal(t, 1, reads, "the object should have been read through the client")
+}
+
+func TestS3StoreCopyObject_FallsBackWhenPartCopyIsNotImplemented(t *testing.T) {
+	restoreThreshold, restorePartSize := s3MaxSingleCopySize, s3CopyPartSize
+	defer func() { s3MaxSingleCopySize, s3CopyPartSize = restoreThreshold, restorePartSize }()
+	s3MaxSingleCopySize, s3CopyPartSize = 4, 4
+
+	store, transport := newMockedS3CopyStore(t, 0, "")
+	transport.sourceContent = "the object content"
+	transport.copyErrorStatus, transport.copyErrorCode = 501, "NotImplemented"
+
+	require.NoError(t, store.CopyObject(context.Background(), "from", "to"))
+
+	var aborts, uploads int
+	for _, request := range transport.requests {
+		switch {
+		case request.method == http.MethodDelete && request.query.Has("uploadId"):
+			aborts++
+		case request.method == http.MethodPut && request.header.Get("x-amz-copy-source") == "":
+			uploads++
+			assert.Equal(t, transport.sourceContent, request.body)
+		}
+	}
+	assert.Equal(t, 1, aborts, "the multipart upload should have been aborted before falling back")
+	assert.Equal(t, 1, uploads, "the object should have been written through the client")
+}
+
+func TestS3StoreCopyObject_ReturnsOtherErrors(t *testing.T) {
+	store, transport := newMockedS3CopyStore(t, 1024, "")
+	transport.copyErrorStatus, transport.copyErrorCode = 403, "AccessDenied"
+
+	err := store.CopyObject(context.Background(), "from", "to")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "AccessDenied")
+
+	for _, request := range transport.requests {
+		if request.method == http.MethodPut {
+			require.NotEmpty(t, request.header.Get("x-amz-copy-source"), "no object should have been uploaded through the client")
+		}
+		assert.NotEqual(t, http.MethodGet, request.method, "no object should have been read through the client")
+	}
 }
 
 // You need a running S3-compatible backend for this one, see docker-compose.yml:

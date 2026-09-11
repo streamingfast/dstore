@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
-* S3 store: `CopyObject` is now done by the service itself, with a single `CopyObject` call up to the 5 GiB S3 allows and a multipart copy of 1 GiB parts above that. It used to download the object and upload it back, which moved every byte through the client and, on a compressed store, decompressed and recompressed it on the way.
+* S3 store: `CopyObject` is now done by the service itself, with a single `CopyObject` call up to the 5 GiB S3 allows and a multipart copy of 1 GiB parts above that. A backend answering `NotImplemented` or `MethodNotAllowed` falls back to the previous behaviour, which downloaded the object and uploaded it back, moving every byte through the client and, on a compressed store, decompressing and recompressing it on the way.
 
 ### Fixed
 

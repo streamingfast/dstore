@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
@@ -413,7 +414,8 @@ var s3CopyPartSize int64 = 1024 * 1024 * 1024
 
 // CopyObject copies an object within the store's bucket without moving its bytes through the
 // client: the service reads the source and writes the destination itself, so nothing is
-// decompressed and recompressed on the way.
+// decompressed and recompressed on the way. A backend with no copy operation of its own is
+// served by streaming the object through the client instead.
 func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
 	srcPath := s.ObjectPath(src)
 	destPath := s.ObjectPath(dest)
@@ -446,13 +448,68 @@ func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
 		size = *head.ContentLength
 	}
 
-	// The SDK expects the source as a URL-escaped "bucket/key".
-	copySource := url.PathEscape(s.bucket + "/" + srcPath)
+	copySource := s3CopySource(s.bucket, srcPath)
 
 	if size > s3MaxSingleCopySize {
-		return s.multipartCopyObject(ctx, copySource, srcPath, destPath, size)
+		err = s.multipartCopyObject(ctx, copySource, srcPath, destPath, size)
+	} else {
+		err = s.singleCopyObject(ctx, copySource, srcPath, destPath)
 	}
 
+	if err != nil && isServerSideCopyUnsupported(err) {
+		zlog.Debug("backend does not support server-side copy, streaming the object through the client instead",
+			zap.String("bucket", s.bucket),
+			zap.String("source", srcPath),
+			zap.String("destination", destPath),
+			zap.Error(err),
+		)
+		return s.copyObjectStreaming(ctx, src, dest)
+	}
+
+	return err
+}
+
+// s3CopySource builds the "bucket/key" the SDK expects as a copy source. Each segment of the
+// key is escaped on its own so the slashes separating them stay literal, which is the form
+// every S3 implementation accepts; a bucket name never needs escaping.
+func s3CopySource(bucket, key string) string {
+	segments := strings.Split(key, "/")
+	for i, segment := range segments {
+		segments[i] = url.PathEscape(segment)
+	}
+
+	return bucket + "/" + strings.Join(segments, "/")
+}
+
+// isServerSideCopyUnsupported reports whether the backend answered that it has no copy
+// operation at all, the one failure a client-side copy can still recover from.
+func isServerSideCopyUnsupported(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+
+	switch apiErr.ErrorCode() {
+	case "NotImplemented", "MethodNotAllowed":
+		return true
+	}
+
+	return false
+}
+
+// copyObjectStreaming reads the source and writes the destination through the client, the only
+// way left when the backend has no server-side copy.
+func (s *S3Store) copyObjectStreaming(ctx context.Context, src, dest string) error {
+	reader, err := s.OpenObject(ctx, src)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	return s.WriteObject(ctx, dest, reader)
+}
+
+func (s *S3Store) singleCopyObject(ctx context.Context, copySource, srcPath, destPath string) error {
 	input := &s3.CopyObjectInput{
 		Bucket:     aws.String(s.bucket),
 		Key:        aws.String(destPath),
