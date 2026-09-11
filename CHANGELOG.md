@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 * Azurite service in `docker-compose.yml`, so the Azure store can be exercised locally without an Azure account, plus the matching `storetests` entry points.
 
+### Changed
+
+* S3 store: `CopyObject` is now done by the service itself, with a single `CopyObject` call up to the 5 GiB S3 allows and a multipart copy of 1 GiB parts above that. It used to download the object and upload it back, which moved every byte through the client and, on a compressed store, decompressed and recompressed it on the way.
+
 ### Fixed
 
 * S3 and Azure stores: `ListFoldersFromTo` now stops paging as soon as the exclusive upper bound is reached, instead of listing the rest of the prefix to discard it. `S3Store.WalkFromTo` does the same, and compares the bound against the full name rather than a prefix-stripped one, which made it yield keys past the bound whenever `prefix` was non-empty.
