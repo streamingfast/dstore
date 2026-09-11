@@ -24,6 +24,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
@@ -405,8 +407,94 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, met
 	return nil
 }
 
+// S3 refuses a single CopyObject call above 5 GiB, bigger objects must be copied part by part.
+var s3MaxSingleCopySize int64 = 5 * 1024 * 1024 * 1024
+
+// Size of each part of a multipart copy, within the 5 MiB to 5 GiB range S3 accepts for a part.
+var s3CopyPartSize int64 = 1024 * 1024 * 1024
+
+// CopyObject copies an object within the store's bucket without moving its bytes through the
+// client: the service reads the source and writes the destination itself, so nothing is
+// decompressed and recompressed on the way. A backend with no copy operation of its own is
+// served by streaming the object through the client instead.
 func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
-	// TODO optimize this
+	srcPath := s.ObjectPath(src)
+	destPath := s.ObjectPath(dest)
+
+	head, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(srcPath),
+	})
+	if err != nil {
+		var notFound *types.NotFound
+		var noSuchKey *types.NoSuchKey
+		if errors.As(err, &notFound) || errors.As(err, &noSuchKey) {
+			return fmt.Errorf("source object %q: %w", srcPath, ErrNotFound)
+		}
+		return fmt.Errorf("reading attributes of source object %q: %w", srcPath, err)
+	}
+
+	if !s.overwrite {
+		exists, err := s.FileExists(ctx, dest)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return nil
+		}
+	}
+
+	var size int64
+	if head.ContentLength != nil {
+		size = *head.ContentLength
+	}
+
+	copySource := s3CopySource(s.bucket, srcPath)
+
+	if size > s3MaxSingleCopySize {
+		err = s.multipartCopyObject(ctx, copySource, srcPath, destPath, size)
+	} else {
+		err = s.singleCopyObject(ctx, copySource, srcPath, destPath)
+	}
+
+	if err != nil && isServerSideCopyUnsupported(err) {
+		zlog.Debug("backend does not support server-side copy, streaming the object through the client instead",
+			zap.String("bucket", s.bucket),
+			zap.String("source", srcPath),
+			zap.String("destination", destPath),
+			zap.Error(err),
+		)
+		return s.copyObjectStreaming(ctx, src, dest)
+	}
+
+	return err
+}
+
+// s3CopySource builds the "bucket/key" the SDK expects as a copy source, escaped with the very
+// encoder the SDK puts request paths through, separators left alone.
+func s3CopySource(bucket, key string) string {
+	return httpbinding.EscapePath(bucket+"/"+key, false)
+}
+
+// isServerSideCopyUnsupported reports whether the backend answered that it has no copy
+// operation at all, the one failure a client-side copy can still recover from.
+func isServerSideCopyUnsupported(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+
+	switch apiErr.ErrorCode() {
+	case "NotImplemented", "MethodNotAllowed":
+		return true
+	}
+
+	return false
+}
+
+// copyObjectStreaming reads the source and writes the destination through the client, the only
+// way left when the backend has no server-side copy.
+func (s *S3Store) copyObjectStreaming(ctx context.Context, src, dest string) error {
 	reader, err := s.OpenObject(ctx, src)
 	if err != nil {
 		return err
@@ -414,6 +502,98 @@ func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
 	defer reader.Close()
 
 	return s.WriteObject(ctx, dest, reader)
+}
+
+func (s *S3Store) singleCopyObject(ctx context.Context, copySource, srcPath, destPath string) error {
+	input := &s3.CopyObjectInput{
+		Bucket:     aws.String(s.bucket),
+		Key:        aws.String(destPath),
+		CopySource: aws.String(copySource),
+	}
+	if s.storageClass != "" {
+		input.StorageClass = types.StorageClass(s.storageClass)
+	}
+
+	if _, err := s.client.CopyObject(ctx, input); err != nil {
+		return fmt.Errorf("copying %q to %q: %w", srcPath, destPath, err)
+	}
+
+	return nil
+}
+
+func (s *S3Store) multipartCopyObject(ctx context.Context, copySource, srcPath, destPath string, size int64) error {
+	createInput := &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(destPath),
+	}
+	if s.storageClass != "" {
+		createInput.StorageClass = types.StorageClass(s.storageClass)
+	}
+
+	created, err := s.client.CreateMultipartUpload(ctx, createInput)
+	if err != nil {
+		return fmt.Errorf("starting multipart copy of %q to %q: %w", srcPath, destPath, err)
+	}
+
+	parts := make([]types.CompletedPart, 0, (size+s3CopyPartSize-1)/s3CopyPartSize)
+	for start, partNumber := int64(0), int32(1); start < size; start, partNumber = start+s3CopyPartSize, partNumber+1 {
+		end := start + s3CopyPartSize - 1
+		if end >= size {
+			end = size - 1
+		}
+
+		// The range bounds are both inclusive.
+		copied, err := s.client.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
+			Bucket:          aws.String(s.bucket),
+			Key:             aws.String(destPath),
+			CopySource:      aws.String(copySource),
+			CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", start, end)),
+			PartNumber:      aws.Int32(partNumber),
+			UploadId:        created.UploadId,
+		})
+		if err != nil {
+			s.abortMultipartUpload(ctx, destPath, created.UploadId)
+			return fmt.Errorf("copying bytes %d-%d of %q to %q: %w", start, end, srcPath, destPath, err)
+		}
+
+		part := types.CompletedPart{PartNumber: aws.Int32(partNumber)}
+		if copied.CopyPartResult != nil {
+			part.ETag = copied.CopyPartResult.ETag
+		}
+		parts = append(parts, part)
+	}
+
+	_, err = s.client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:          aws.String(s.bucket),
+		Key:             aws.String(destPath),
+		UploadId:        created.UploadId,
+		MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
+	})
+	if err != nil {
+		s.abortMultipartUpload(ctx, destPath, created.UploadId)
+		return fmt.Errorf("completing multipart copy of %q to %q: %w", srcPath, destPath, err)
+	}
+
+	return nil
+}
+
+// abortMultipartUpload releases the parts already copied, which the bucket keeps billing
+// until the upload is either completed or aborted. It runs even when ctx is done, since
+// a cancelled copy is exactly when the leftovers need to go.
+func (s *S3Store) abortMultipartUpload(ctx context.Context, destPath string, uploadID *string) {
+	_, err := s.client.AbortMultipartUpload(context.WithoutCancel(ctx), &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(s.bucket),
+		Key:      aws.String(destPath),
+		UploadId: uploadID,
+	})
+	if err != nil {
+		zlog.Warn("unable to abort multipart copy, parts already copied may linger in the bucket",
+			zap.String("bucket", s.bucket),
+			zap.String("key", destPath),
+			zap.Stringp("upload_id", uploadID),
+			zap.Error(err),
+		)
+	}
 }
 
 func (s *S3Store) FileExists(ctx context.Context, base string) (bool, error) {
