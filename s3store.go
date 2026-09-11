@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/encoding/httpbinding"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
@@ -469,16 +470,10 @@ func (s *S3Store) CopyObject(ctx context.Context, src, dest string) error {
 	return err
 }
 
-// s3CopySource builds the "bucket/key" the SDK expects as a copy source. Each segment of the
-// key is escaped on its own so the slashes separating them stay literal, which is the form
-// every S3 implementation accepts; a bucket name never needs escaping.
+// s3CopySource builds the "bucket/key" the SDK expects as a copy source, escaped with the very
+// encoder the SDK puts request paths through, separators left alone.
 func s3CopySource(bucket, key string) string {
-	segments := strings.Split(key, "/")
-	for i, segment := range segments {
-		segments[i] = url.PathEscape(segment)
-	}
-
-	return bucket + "/" + strings.Join(segments, "/")
+	return httpbinding.EscapePath(bucket+"/"+key, false)
 }
 
 // isServerSideCopyUnsupported reports whether the backend answered that it has no copy

@@ -200,11 +200,11 @@ func TestS3StoreCopyObject_Multipart(t *testing.T) {
 func TestS3StoreCopyObject_CopySourceEscaping(t *testing.T) {
 	store, transport := newMockedS3CopyStore(t, 1024, "")
 
-	require.NoError(t, store.CopyObject(context.Background(), "a folder/an object", "to"))
+	require.NoError(t, store.CopyObject(context.Background(), "a b/c+d", "to"))
 
 	require.Len(t, transport.requests, 2)
-	assert.Equal(t, "bucket/root/a%20folder/an%20object", transport.requests[1].header.Get("x-amz-copy-source"),
-		"the slashes separating the segments stay literal, only what is special within a segment is escaped")
+	assert.Equal(t, "bucket/root/a%20b/c%2Bd", transport.requests[1].header.Get("x-amz-copy-source"),
+		"the slashes separating the segments stay literal, everything else is percent-encoded")
 }
 
 func TestS3StoreCopyObject_FallsBackWhenCopyIsNotImplemented(t *testing.T) {
