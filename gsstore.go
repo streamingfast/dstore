@@ -367,11 +367,14 @@ func (s *GSStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusi
 		if err != nil {
 			return err
 		}
-		if err := f(s.toBaseName(attrs.Name)); err != nil {
-			if errors.Is(err, StopIteration) {
-				return nil
+		baseName := s.toBaseName(attrs.Name)
+		if baseName != "" {
+			if err := f(baseName); err != nil {
+				if errors.Is(err, StopIteration) {
+					return nil
+				}
+				return err
 			}
-			return err
 		}
 	}
 	return nil
