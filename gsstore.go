@@ -45,11 +45,15 @@ func (s *GSStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
 }
 
 func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*GSStore, error) {
+	common, err := newCommonStore(baseURL, extension, compressionType, overwrite, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	query := baseURL.Query()
 	userProject := query.Get("project")
 
 	var client *storage.Client
-	var err error
 	if query.Get("client_protocol") == "grpc" {
 		var grpcOpts []option.ClientOption
 		if userProject != "" {
@@ -80,21 +84,6 @@ func newGSStoreContext(ctx context.Context, baseURL *url.URL, extension, compres
 	}
 
 	client.SetRetry(storage.WithBackoff(gax.Backoff{}))
-
-	conf := config{}
-	for _, opt := range opts {
-		opt.apply(&conf)
-	}
-
-	common := &commonStore{
-		compressionType:           compressionType,
-		extension:                 extension,
-		overwrite:                 overwrite,
-		uncompressedReadCallback:  conf.uncompressedReadCallback,
-		compressedReadCallback:    conf.compressedReadCallback,
-		uncompressedWriteCallback: conf.uncompressedWriteCallback,
-		compressedWriteCallback:   conf.compressedWriteCallback,
-	}
 
 	return &GSStore{
 		baseURL:     baseURL,

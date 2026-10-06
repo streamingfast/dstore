@@ -40,6 +40,11 @@ func (s *AzureStore) Clone(ctx context.Context, opts ...Option) (Store, error) {
 }
 
 func newAzureStoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*AzureStore, error) {
+	common, err := newCommonStore(baseURL, extension, compressionType, overwrite, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	accountName, containerName, err := decodeAzureScheme(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("specify azure account name and container like: az://account.container/path")
@@ -87,21 +92,6 @@ func newAzureStoreContext(_ context.Context, baseURL *url.URL, extension, compre
 		if err != nil {
 			return nil, fmt.Errorf("failed to create azure client with default credential: %w", err)
 		}
-	}
-
-	conf := config{}
-	for _, opt := range opts {
-		opt.apply(&conf)
-	}
-
-	common := &commonStore{
-		compressionType:           compressionType,
-		extension:                 extension,
-		overwrite:                 overwrite,
-		uncompressedReadCallback:  conf.uncompressedReadCallback,
-		compressedReadCallback:    conf.compressedReadCallback,
-		uncompressedWriteCallback: conf.uncompressedWriteCallback,
-		compressedWriteCallback:   conf.compressedWriteCallback,
 	}
 
 	return &AzureStore{

@@ -18,6 +18,7 @@ import (
 type commonStore struct {
 	extension       string
 	compressionType string
+	zstdOptions     []zstd.EOption
 	overwrite       bool
 
 	compressedWriteCallback   func(ctx context.Context, size int)
@@ -137,7 +138,7 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 			return err
 		}
 	case "zstd":
-		zstdEncoder, err := zstd.NewWriter(destination, zstdEncoderOptions...)
+		zstdEncoder, err := zstd.NewWriter(destination, c.zstdOptions...)
 		if err != nil {
 			return err
 		}

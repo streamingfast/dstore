@@ -68,14 +68,10 @@ func TestCompressedCopyZstdWithConfig(t *testing.T) {
 	opts, err := parseZstdConfig("best/64")
 	require.NoError(t, err)
 
-	previous := zstdEncoderOptions
-	zstdEncoderOptions = opts
-	defer func() { zstdEncoderOptions = previous }()
-
 	// Larger than the 8 MiB default window, so the frame advertises the configured one.
 	raw := bytes.Repeat([]byte("dstore zstd config "), (16<<20)/19)
 
-	c := commonStore{compressionType: "zstd"}
+	c := commonStore{compressionType: "zstd", zstdOptions: opts}
 	compressed := bytes.NewBuffer(nil)
 	require.NoError(t, c.compressedCopy(context.Background(), compressed, bytes.NewReader(raw)))
 
@@ -89,19 +85,4 @@ func TestCompressedCopyZstdWithConfig(t *testing.T) {
 	out, err := dec.DecodeAll(compressed.Bytes(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, raw, out)
-}
-
-func TestNewStoreRejectsInvalidZstdConfig(t *testing.T) {
-	_, err := parseZstdConfig("fast")
-	require.Error(t, err)
-
-	previous := zstdConfigErr
-	zstdConfigErr = err
-	defer func() { zstdConfigErr = previous }()
-
-	_, err = NewStore("memory://test", "dbin.zst", "zstd", false)
-	require.ErrorIs(t, err, zstdConfigErr)
-
-	_, err = NewStore("memory://test", "dbin.gz", "gzip", false)
-	require.NoError(t, err)
 }

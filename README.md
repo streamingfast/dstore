@@ -19,19 +19,27 @@ It currently supports:
 
 ### Compression
 
-Stores created with `zstd` compression encode with the library defaults unless
-`DSTORE_ZSTD_CONFIG` is set to `<level>` or `<level>/<window MiB>`:
+Every store takes two query parameters on its URL, whatever the scheme:
 
-* `best` uses the best compression level with the default 8 MiB window
-* `better/32` uses the better compression level with a 32 MiB window
-* `best/64` uses the best compression level with a 64 MiB window
+* `compression=zstd|gzip|none` overrides the compression the store was created
+  with, and the `Compression` option. The compression suffix of the extension
+  follows it: `NewDBinStore("gs://bucket/merged-blocks?compression=gzip")` writes
+  and reads `.dbin.gz` files instead of `.dbin.zst`. Extensions without a
+  compression suffix are kept as is. Readers must use the same `compression` as
+  the writer.
+* `compression_config=<level>` or `<level>/<window MiB>` sets the zstd encoder
+  level and window, for example `best`, `better/32` or `best/64`. Levels are
+  `fastest`, `default`, `better` and `best`; the window must be a power of two.
+  It only changes how files are written, and is an error on a store that does
+  not compress with zstd.
 
-Levels are `fastest`, `default`, `better` and `best`. The window must be a power of two.
-An invalid value makes `NewStore` fail for every `zstd` store.
+An invalid value makes the store constructor fail. `ResolveCompression` applies
+these rules and is exported for code that builds its own stores.
 
-Nothing changes on the read side: decoders take the window from the frame header. Every
-reader needs memory for that window, though, and the `zstd` command line tool refuses
-windows above 128 MiB unless run with `--long=31` or `--memory`.
+Nothing changes on the read side for `compression_config`: decoders take the
+window from the frame header. Every reader needs memory for that window, though,
+and the `zstd` command line tool refuses windows above 128 MiB unless run with
+`--long=31` or `--memory`.
 
 Measured on BNB Chain merged blocks (16-core arm64), relative to the defaults:
 

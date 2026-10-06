@@ -99,6 +99,9 @@ func NewSimpleStore(baseURL string, opts ...Option) (Store, error) {
 }
 
 // NewStore creates a new Store instance. The baseURL is always a directory, and does not end with a `/`.
+//
+// The `compression` and `compression_config` query parameters of baseURL override
+// `compressionType` and the Compression option, see ResolveCompression.
 func NewStore(baseURL, extension, compressionType string, overwrite bool, opts ...Option) (Store, error) {
 	if strings.HasSuffix(baseURL, "/") {
 		return nil, fmt.Errorf("baseURL shouldn't end with a /")
@@ -109,19 +112,6 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 	base, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
-	}
-
-	config := config{}
-	for _, opt := range opts {
-		opt.apply(&config)
-	}
-
-	if config.compression != "" {
-		compressionType = config.compression
-	}
-
-	if compressionType == "zstd" && zstdConfigErr != nil {
-		return nil, zstdConfigErr
 	}
 
 	switch base.Scheme {
@@ -164,11 +154,12 @@ func (f optionFunc) apply(config *config) {
 }
 
 // Compression defines which kind of compression to use when creating the store
-// instance.
+// instance. The `compression` query parameter of the store URL overrides it, see
+// ResolveCompression.
 //
 // Valid `compressionType` values:
 // - <empty>       No compression
-// - zstd          Use ZSTD compression, tuned with the DSTORE_ZSTD_CONFIG env var
+// - zstd          Use ZSTD compression
 // - gzip          Use GZIP compression
 func Compression(compressionType string) Option {
 	return optionFunc(func(config *config) {
