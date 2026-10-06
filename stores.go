@@ -120,6 +120,10 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 		compressionType = config.compression
 	}
 
+	if compressionType == "zstd" && zstdConfigErr != nil {
+		return nil, zstdConfigErr
+	}
+
 	switch base.Scheme {
 	case "gs":
 		return NewGSStore(base, extension, compressionType, overwrite, opts...)
@@ -164,7 +168,7 @@ func (f optionFunc) apply(config *config) {
 //
 // Valid `compressionType` values:
 // - <empty>       No compression
-// - zstd          Use ZSTD compression
+// - zstd          Use ZSTD compression, tuned with the DSTORE_ZSTD_CONFIG env var
 // - gzip          Use GZIP compression
 func Compression(compressionType string) Option {
 	return optionFunc(func(config *config) {

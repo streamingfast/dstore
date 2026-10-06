@@ -17,6 +17,34 @@ It currently supports:
 * Azure Blob Storage (`az://[account].[container]/path`, with `AZURE_STORAGE_KEY` env var set)
 * Local file systems (including virtual of fused-based) (`file:///` prefix)
 
+### Compression
+
+Stores created with `zstd` compression encode with the library defaults unless
+`DSTORE_ZSTD_CONFIG` is set to `<level>` or `<level>/<window MiB>`:
+
+* `best` uses the best compression level with the default 8 MiB window
+* `better/32` uses the better compression level with a 32 MiB window
+* `best/64` uses the best compression level with a 64 MiB window
+
+Levels are `fastest`, `default`, `better` and `best`. The window must be a power of two.
+An invalid value makes `NewStore` fail for every `zstd` store.
+
+Nothing changes on the read side: decoders take the window from the frame header. Every
+reader needs memory for that window, though, and the `zstd` command line tool refuses
+windows above 128 MiB unless run with `--long=31` or `--memory`.
+
+Measured on BNB Chain merged blocks (16-core arm64), relative to the defaults:
+
+| config | compressed size | encode | decode |
+|---|---|---|---|
+| (unset) | 100% | 879 MB/s | 2362 MB/s |
+| `better` | 89.5% | 475 MB/s | 2466 MB/s |
+| `better/32` | 86.1% | 490 MB/s | 1347 MB/s |
+| `best` | 86.8% | 73 MB/s | 2512 MB/s |
+| `best/32` | 77.6% | 66 MB/s | 1365 MB/s |
+| `best/64` | 73.6% | 64 MB/s | 892 MB/s |
+| `best/128` | 71.4% | 64 MB/s | 623 MB/s |
+
 ### Testing
 
 The `storetests` package contains all our integration tests we perform on our store implementation.

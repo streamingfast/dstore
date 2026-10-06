@@ -137,7 +137,7 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 			return err
 		}
 	case "zstd":
-		zstdEncoder, err := zstd.NewWriter(destination)
+		zstdEncoder, err := zstd.NewWriter(destination, zstdEncoderOptions...)
 		if err != nil {
 			return err
 		}

@@ -1,8 +1,6 @@
 module github.com/streamingfast/dstore
 
-go 1.24.0
-
-toolchain go1.24.11
+go 1.25
 
 require (
 	cloud.google.com/go/storage v1.59.1
@@ -16,7 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
 	github.com/aws/smithy-go v1.25.1
 	github.com/googleapis/gax-go/v2 v2.15.0
-	github.com/klauspost/compress v1.10.2
+	github.com/klauspost/compress v1.20.1
 	github.com/streamingfast/logging v0.0.0-20220304214715-bc750a74b424
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.21.0

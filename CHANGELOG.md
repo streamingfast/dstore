@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+* `DSTORE_ZSTD_CONFIG` sets the encoder level and window of every `zstd` store, as `<level>` or `<level>/<window MiB>` (`best`, `better/32`, `best/64`). Levels are `fastest`, `default`, `better` and `best`. Unset, the library defaults are kept; an invalid value makes `NewStore` fail for `zstd` stores. Readers need no change, but must have memory for the window, and the `zstd` command line tool refuses windows above 128 MiB by default. On BNB Chain merged blocks, `best/64` writes files 26% smaller than the defaults, encoding at 64 MB/s instead of 879 MB/s and decoding at 892 MB/s instead of 2362 MB/s. See the README for the other configurations.
+
 * `Store` gained `ListFoldersFromTo(ctx, prefix, inclusiveFrom, exclusiveTo, max)`, `ListFolders` restricted to a slice of the key space. A single folder listing is paged one round trip at a time however few folders come back, so a caller holding tens of thousands of them can now split the key space and list the slices concurrently: on a Google Cloud Storage folder holding 39k sub-folders that takes the listing from 8.2s to 1.1s. `GSStore` pushes both bounds down as the listing's start and end offsets and `S3Store` pushes the lower one down as `StartAfter`; the others filter what they listed. The bounds must start with `prefix`, the same contract `WalkFromTo` enforces.
 
 * `Store` gained `ListFolders(ctx, prefix, max)`, returning the immediate sub-folders of `prefix` (each relative to the store and ending with `/`) without reporting anything nested deeper. Object stores answer it with a single delimited listing that never looks at the objects below; `LocalStore` reads the one directory. A negative `max` means unlimited, and `prefix` is accepted with or without its trailing `/`.
@@ -19,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * Azurite service in `docker-compose.yml`, so the Azure store can be exercised locally without an Azure account, plus the matching `storetests` entry points.
 
 ### Changed
+
+* Bumped `github.com/klauspost/compress` from v1.10.2 to v1.20.1, which requires Go 1.25. In v1.10.2 the `better` and `best` levels were aliases of `default`.
 
 * S3 store: `CopyObject` is now done by the service itself, with a single `CopyObject` call up to the 5 GiB S3 allows and a multipart copy of 1 GiB parts above that. A backend answering `NotImplemented` or `MethodNotAllowed` falls back to the previous behaviour, which downloaded the object and uploaded it back, moving every byte through the client and, on a compressed store, decompressing and recompressing it on the way.
 
