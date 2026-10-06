@@ -92,7 +92,7 @@ func (m *MemoryStore) ObjectPath(name string) string {
 }
 
 func (m *MemoryStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(m.baseURL.String(), "/"), strings.TrimLeft(m.pathWithExt(name), "/"))
+	return objectURL(m.baseURL, m.pathWithExt(name))
 }
 
 func (m *MemoryStore) ObjectAttributes(_ context.Context, base string) (*ObjectAttributes, error) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -35,6 +36,20 @@ func (c *commonStore) pathWithExt(base string) string {
 		return base + "." + c.extension
 	}
 	return base
+}
+
+// objectURL returns the URL of the object at path in the store at baseURL, with
+// the query of baseURL kept after the path.
+func objectURL(baseURL *url.URL, path string) string {
+	base := *baseURL
+	base.RawQuery = ""
+	base.ForceQuery = false
+
+	out := fmt.Sprintf("%s/%s", strings.TrimRight(base.String(), "/"), strings.TrimLeft(path, "/"))
+	if baseURL.RawQuery != "" {
+		out += "?" + baseURL.RawQuery
+	}
+	return out
 }
 
 func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {

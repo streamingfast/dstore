@@ -24,11 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+* `NewStoreFromFileURL`, `OpenObject` and `ReadObject` take the compression from the file name when the `Compression` option is not given: `.zst` files are decompressed with zstd and `.gz` files with gzip. They were read as is before; add `?compression=none` to the URL to keep that.
+
 * Bumped `github.com/klauspost/compress` from v1.10.2 to v1.20.1, which requires Go 1.25. In v1.10.2 the `better` and `best` levels were aliases of `default`.
 
 * S3 store: `CopyObject` is now done by the service itself, with a single `CopyObject` call up to the 5 GiB S3 allows and a multipart copy of 1 GiB parts above that. A backend answering `NotImplemented` or `MethodNotAllowed` falls back to the previous behaviour, which downloaded the object and uploaded it back, moving every byte through the client and, on a compressed store, decompressing and recompressing it on the way.
 
 ### Fixed
+
+* `ObjectURL` keeps the query of the store URL after the object path (`gs://bucket/path/file.dbin.zst?project=p`) instead of appending the path to the query.
 
 * S3 and Azure stores: `ListFoldersFromTo` now stops paging as soon as the exclusive upper bound is reached, instead of listing the rest of the prefix to discard it. `S3Store.WalkFromTo` does the same, and compares the bound against the full name rather than a prefix-stripped one, which made it yield keys past the bound whenever `prefix` was non-empty.
 

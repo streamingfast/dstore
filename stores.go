@@ -216,6 +216,10 @@ var NewStoreFromURL = NewStoreFromFileURL
 //
 // This is a shortcut helper function that make it simpler to get store from a single file
 // url.
+//
+// Without the Compression option, the compression is taken from the file name: `.zst` is
+// read as zstd, `.gz` as gzip and anything else as uncompressed. The `compression` query
+// parameter overrides both, `compression=none` reading a compressed file as is.
 func NewStoreFromFileURL(fileURL string, opts ...Option) (store Store, filename string, err error) {
 	var storeURL string
 	if _, err := os.Stat(fileURL); !os.IsNotExist(err) {
@@ -238,7 +242,12 @@ func NewStoreFromFileURL(fileURL string, opts ...Option) (store Store, filename 
 		opt.apply(&config)
 	}
 
-	store, err = NewStore(storeURL, "", config.compression, config.overwrite, opts...)
+	compressionType := config.compression
+	if compressionType == "" {
+		compressionType = compressionFromFilename(filename)
+	}
+
+	store, err = NewStore(storeURL, "", compressionType, config.overwrite, opts...)
 	if err != nil {
 		return nil, filename, fmt.Errorf("open store: %w", err)
 	}

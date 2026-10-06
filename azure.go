@@ -137,7 +137,7 @@ func (s *AzureStore) ObjectPath(name string) string {
 }
 
 func (s *AzureStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
+	return objectURL(s.baseURL, s.pathWithExt(name))
 }
 
 func (s *AzureStore) FileExists(ctx context.Context, base string) (bool, error) {

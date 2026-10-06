@@ -308,7 +308,7 @@ func (s *S3Store) ObjectPath(name string) string {
 }
 
 func (s *S3Store) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
+	return objectURL(s.baseURL, s.pathWithExt(name))
 }
 
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
