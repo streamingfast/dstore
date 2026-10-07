@@ -32,6 +32,11 @@ func NewLocalStore(baseURL *url.URL, extension, compressionType string, overwrit
 }
 
 func newLocalStoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*LocalStore, error) {
+	common, err := newCommonStore(baseURL, extension, compressionType, overwrite, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	rand.Seed(time.Now().UnixNano())
 	basePath := filepath.Clean(baseURL.Path)
 	zlog.Debug("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
@@ -46,21 +51,6 @@ func newLocalStoreContext(_ context.Context, baseURL *url.URL, extension, compre
 		}
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("received base path is a file, expecting it to be a directory")
-	}
-
-	conf := config{}
-	for _, opt := range opts {
-		opt.apply(&conf)
-	}
-
-	common := &commonStore{
-		compressionType:           compressionType,
-		extension:                 extension,
-		overwrite:                 overwrite,
-		uncompressedReadCallback:  conf.uncompressedReadCallback,
-		compressedReadCallback:    conf.compressedReadCallback,
-		uncompressedWriteCallback: conf.uncompressedWriteCallback,
-		compressedWriteCallback:   conf.compressedWriteCallback,
 	}
 
 	return &LocalStore{
@@ -81,6 +71,7 @@ func (s *LocalStore) SubStore(subFolder string) (Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("local store parsing base url: %w", err)
 	}
+	url.RawQuery = s.baseURL.RawQuery
 
 	ls, err := NewLocalStore(url, s.extension, s.compressionType, s.overwrite)
 	if err != nil {
@@ -255,7 +246,7 @@ func (s *LocalStore) ObjectPath(name string) string {
 }
 
 func (s *LocalStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
+	return objectURL(s.baseURL, s.pathWithExt(name))
 }
 
 func (s *LocalStore) DeleteObject(ctx context.Context, base string) error {

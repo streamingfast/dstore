@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -18,6 +19,8 @@ import (
 type commonStore struct {
 	extension       string
 	compressionType string
+	zstdOptions     []zstd.EOption
+	gzipLevel       *int // gzip.DefaultCompression when nil
 	overwrite       bool
 
 	compressedWriteCallback   func(ctx context.Context, size int)
@@ -34,6 +37,20 @@ func (c *commonStore) pathWithExt(base string) string {
 		return base + "." + c.extension
 	}
 	return base
+}
+
+// objectURL returns the URL of the object at path in the store at baseURL, with
+// the query of baseURL kept after the path.
+func objectURL(baseURL *url.URL, path string) string {
+	base := *baseURL
+	base.RawQuery = ""
+	base.ForceQuery = false
+
+	out := fmt.Sprintf("%s/%s", strings.TrimRight(base.String(), "/"), strings.TrimLeft(path, "/"))
+	if baseURL.RawQuery != "" {
+		out += "?" + baseURL.RawQuery
+	}
+	return out
 }
 
 func commonWalkFrom(store Store, ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
@@ -124,7 +141,14 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 	var dest io.Writer
 	switch c.compressionType {
 	case "gzip":
-		gw := gzip.NewWriter(destination)
+		level := gzip.DefaultCompression
+		if c.gzipLevel != nil {
+			level = *c.gzipLevel
+		}
+		gw, err := gzip.NewWriterLevel(destination, level)
+		if err != nil {
+			return err
+		}
 		if c.uncompressedWriteCallback != nil {
 			dest = &callbackWriter{w: gw, callback: c.uncompressedWriteCallback, ctx: ctx}
 		} else {
@@ -137,7 +161,7 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 			return err
 		}
 	case "zstd":
-		zstdEncoder, err := zstd.NewWriter(destination)
+		zstdEncoder, err := zstd.NewWriter(destination, c.zstdOptions...)
 		if err != nil {
 			return err
 		}

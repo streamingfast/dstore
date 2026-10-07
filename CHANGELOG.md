@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+* Every store reads the `compression_config` query parameter of its URL to tune how it compresses the files it writes: for zstd stores, the level and window as `<level>` or `<level>/<window MiB>` (`best`, `better/32`, `best/64`); for gzip stores, an integer level from `-2` to `9`. The setting applies to that store only, and is kept by `SubStore` and `Clone`. A value not valid for the store's compression, or any value on a store without compression, makes the constructor fail. Readers need no change, but must have memory for the zstd window, and the `zstd` command line tool refuses windows above 128 MiB by default. On BNB Chain merged blocks, `best/64` writes files 26% smaller than the defaults, encoding at 64 MB/s instead of 879 MB/s and decoding at 892 MB/s instead of 2362 MB/s. See the README for the other configurations.
+
+* The `Compression` option is now honoured by stores created directly with `NewGSStore`, `NewS3Store`, `NewAzureStore`, `NewLocalStore` and `NewMemoryStore`, and by `Clone`, not only through `NewStore`.
+
 * `Store` gained `ListFoldersFromTo(ctx, prefix, inclusiveFrom, exclusiveTo, max)`, `ListFolders` restricted to a slice of the key space. A single folder listing is paged one round trip at a time however few folders come back, so a caller holding tens of thousands of them can now split the key space and list the slices concurrently: on a Google Cloud Storage folder holding 39k sub-folders that takes the listing from 8.2s to 1.1s. `GSStore` pushes both bounds down as the listing's start and end offsets and `S3Store` pushes the lower one down as `StartAfter`; the others filter what they listed. The bounds must start with `prefix`, the same contract `WalkFromTo` enforces.
 
 * `Store` gained `ListFolders(ctx, prefix, max)`, returning the immediate sub-folders of `prefix` (each relative to the store and ending with `/`) without reporting anything nested deeper. Object stores answer it with a single delimited listing that never looks at the objects below; `LocalStore` reads the one directory. A negative `max` means unlimited, and `prefix` is accepted with or without its trailing `/`.
@@ -20,9 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+* Bumped `github.com/klauspost/compress` from v1.10.2 to v1.20.1, which requires Go 1.25. In v1.10.2 the `better` and `best` levels were aliases of `default`.
+
 * S3 store: `CopyObject` is now done by the service itself, with a single `CopyObject` call up to the 5 GiB S3 allows and a multipart copy of 1 GiB parts above that. A backend answering `NotImplemented` or `MethodNotAllowed` falls back to the previous behaviour, which downloaded the object and uploaded it back, moving every byte through the client and, on a compressed store, decompressing and recompressing it on the way.
 
 ### Fixed
+
+* `NewStore` returns a nil `Store` on error, instead of a nil store pointer wrapped in a non-nil interface.
+
+* `ObjectURL` keeps the query of the store URL after the object path (`gs://bucket/path/file.dbin.zst?project=p`) instead of appending the path to the query.
 
 * S3 and Azure stores: `ListFoldersFromTo` now stops paging as soon as the exclusive upper bound is reached, instead of listing the rest of the prefix to discard it. `S3Store.WalkFromTo` does the same, and compares the bound against the full name rather than a prefix-stripped one, which made it yield keys past the bound whenever `prefix` was non-empty.
 

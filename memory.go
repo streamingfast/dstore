@@ -92,7 +92,7 @@ func (m *MemoryStore) ObjectPath(name string) string {
 }
 
 func (m *MemoryStore) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(m.baseURL.String(), "/"), strings.TrimLeft(m.pathWithExt(name), "/"))
+	return objectURL(m.baseURL, m.pathWithExt(name))
 }
 
 func (m *MemoryStore) ObjectAttributes(_ context.Context, base string) (*ObjectAttributes, error) {
@@ -225,19 +225,9 @@ func NewMemoryStore(baseURL *url.URL, extension, compressionType string, overwri
 }
 
 func newMemoryStoreContext(_ context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*MemoryStore, error) {
-	conf := config{}
-	for _, opt := range opts {
-		opt.apply(&conf)
-	}
-
-	common := &commonStore{
-		compressionType:           compressionType,
-		extension:                 extension,
-		overwrite:                 overwrite,
-		uncompressedReadCallback:  conf.uncompressedReadCallback,
-		compressedReadCallback:    conf.compressedReadCallback,
-		uncompressedWriteCallback: conf.uncompressedWriteCallback,
-		compressedWriteCallback:   conf.compressedWriteCallback,
+	common, err := newCommonStore(baseURL, extension, compressionType, overwrite, opts...)
+	if err != nil {
+		return nil, err
 	}
 
 	return &MemoryStore{

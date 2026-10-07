@@ -17,6 +17,39 @@ It currently supports:
 * Azure Blob Storage (`az://[account].[container]/path`, with `AZURE_STORAGE_KEY` env var set)
 * Local file systems (including virtual of fused-based) (`file:///` prefix)
 
+### Compression
+
+The `compression_config` query parameter of a store URL, whatever the scheme, tunes
+how that store compresses the files it writes:
+
+* zstd stores: `<level>` or `<level>/<window MiB>`, for example `best`, `better/32`
+  or `best/64`. Levels are `fastest`, `default`, `better` and `best`; the window
+  must be a power of two.
+* gzip stores: an integer level from `-2` to `9`, as defined by `compress/gzip`:
+  `1` is the fastest, `9` the smallest.
+
+For example, `NewDBinStore("gs://bucket/merged-blocks?compression_config=best/32")`.
+
+The store constructor fails when the value is not valid for the store's
+compression (`8` on a zstd store, `better` on a gzip one), or when the store has
+no compression. Sub-stores and clones keep the setting, and `NewStore` logs it.
+
+Nothing changes on the read side: decoders take the window from the frame header.
+Every reader needs memory for that window, though, and the `zstd` command line tool
+refuses windows above 128 MiB unless run with `--long=31` or `--memory`.
+
+Measured on BNB Chain merged blocks (16-core arm64), relative to the defaults:
+
+| config | compressed size | encode | decode |
+|---|---|---|---|
+| (unset) | 100% | 879 MB/s | 2362 MB/s |
+| `better` | 89.5% | 475 MB/s | 2466 MB/s |
+| `better/32` | 86.1% | 490 MB/s | 1347 MB/s |
+| `best` | 86.8% | 73 MB/s | 2512 MB/s |
+| `best/32` | 77.6% | 66 MB/s | 1365 MB/s |
+| `best/64` | 73.6% | 64 MB/s | 892 MB/s |
+| `best/128` | 71.4% | 64 MB/s | 623 MB/s |
+
 ### Testing
 
 The `storetests` package contains all our integration tests we perform on our store implementation.

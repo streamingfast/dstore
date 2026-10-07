@@ -147,19 +147,9 @@ func NewS3Store(baseURL *url.URL, extension, compressionType string, overwrite b
 }
 
 func newS3StoreContext(ctx context.Context, baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*S3Store, error) {
-	conf := config{}
-	for _, opt := range opts {
-		opt.apply(&conf)
-	}
-
-	common := &commonStore{
-		compressionType:           compressionType,
-		extension:                 extension,
-		overwrite:                 overwrite,
-		uncompressedReadCallback:  conf.uncompressedReadCallback,
-		compressedReadCallback:    conf.compressedReadCallback,
-		uncompressedWriteCallback: conf.uncompressedWriteCallback,
-		compressedWriteCallback:   conf.compressedWriteCallback,
+	common, err := newCommonStore(baseURL, extension, compressionType, overwrite, opts...)
+	if err != nil {
+		return nil, err
 	}
 
 	s := &S3Store{
@@ -318,7 +308,7 @@ func (s *S3Store) ObjectPath(name string) string {
 }
 
 func (s *S3Store) ObjectURL(name string) string {
-	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL.String(), "/"), strings.TrimLeft(s.pathWithExt(name), "/"))
+	return objectURL(s.baseURL, s.pathWithExt(name))
 }
 
 func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, metadataKeyValues ...string) (err error) {
