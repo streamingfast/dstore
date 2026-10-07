@@ -1,8 +1,10 @@
 package dstore
 
 import (
+	"compress/gzip"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
@@ -18,6 +20,10 @@ type StoreCompression struct {
 
 	// ZstdOptions are the encoder options of a zstd store, from compression_config.
 	ZstdOptions []zstd.EOption
+
+	// GzipLevel is the compression level of a gzip store, from compression_config,
+	// gzip.DefaultCompression when not set.
+	GzipLevel int
 }
 
 // ResolveCompression returns the compression and extension of a store created
@@ -32,9 +38,12 @@ type StoreCompression struct {
 // never follows the compression by itself: a store overriding one usually
 // overrides both.
 //
-// The `compression_config` query parameter sets the zstd encoder level and
-// window as `<level>` or `<level>/<window MiB>` (`best`, `better/32`,
-// `best/64`). It is an error on a store that does not compress with zstd.
+// The `compression_config` query parameter tunes the encoder of the resolved
+// compression. For zstd, it is the level and window as `<level>` or
+// `<level>/<window MiB>` (`best`, `better/32`, `best/64`). For gzip, it is an
+// integer level from -2 to 9 as defined by compress/gzip (`1` fastest, `9`
+// smallest). It is an error on a store without compression, or when the value
+// is not valid for the resolved compression.
 func ResolveCompression(baseURL *url.URL, extension, compressionType string, opts ...Option) (*StoreCompression, error) {
 	conf := config{}
 	for _, opt := range opts {
@@ -69,21 +78,39 @@ func ResolveCompression(baseURL *url.URL, extension, compressionType string, opt
 	out := &StoreCompression{
 		Type:      resolved,
 		Extension: extension,
+		GzipLevel: gzip.DefaultCompression,
 	}
 
 	if spec := query.Get("compression_config"); spec != "" {
-		if resolved != "zstd" {
-			return nil, fmt.Errorf("compression_config %q requires zstd compression, store compression is %q", spec, compressionName(resolved))
+		switch resolved {
+		case "zstd":
+			zstdOptions, err := parseZstdConfig(spec)
+			if err != nil {
+				return nil, err
+			}
+			out.ZstdOptions = zstdOptions
+		case "gzip":
+			level, err := parseGzipConfig(spec)
+			if err != nil {
+				return nil, err
+			}
+			out.GzipLevel = level
+		default:
+			return nil, fmt.Errorf("compression_config %q requires zstd or gzip compression, store compression is %q", spec, compressionName(resolved))
 		}
-
-		zstdOptions, err := parseZstdConfig(spec)
-		if err != nil {
-			return nil, err
-		}
-		out.ZstdOptions = zstdOptions
 	}
 
 	return out, nil
+}
+
+// parseGzipConfig reads a gzip compression level, an integer from
+// gzip.HuffmanOnly (-2) to gzip.BestCompression (9).
+func parseGzipConfig(spec string) (int, error) {
+	level, err := strconv.Atoi(spec)
+	if err != nil || level < gzip.HuffmanOnly || level > gzip.BestCompression {
+		return 0, fmt.Errorf("invalid compression_config %q for gzip: expected an integer level from %d to %d", spec, gzip.HuffmanOnly, gzip.BestCompression)
+	}
+	return level, nil
 }
 
 func compressionName(compressionType string) string {
@@ -109,6 +136,7 @@ func newCommonStore(baseURL *url.URL, extension, compressionType string, overwri
 		compressionType:           compression.Type,
 		extension:                 compression.Extension,
 		zstdOptions:               compression.ZstdOptions,
+		gzipLevel:                 &compression.GzipLevel,
 		overwrite:                 overwrite,
 		uncompressedReadCallback:  conf.uncompressedReadCallback,
 		compressedReadCallback:    conf.compressedReadCallback,

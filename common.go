@@ -20,6 +20,7 @@ type commonStore struct {
 	extension       string
 	compressionType string
 	zstdOptions     []zstd.EOption
+	gzipLevel       *int // gzip.DefaultCompression when nil
 	overwrite       bool
 
 	compressedWriteCallback   func(ctx context.Context, size int)
@@ -140,7 +141,14 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 	var dest io.Writer
 	switch c.compressionType {
 	case "gzip":
-		gw := gzip.NewWriter(destination)
+		level := gzip.DefaultCompression
+		if c.gzipLevel != nil {
+			level = *c.gzipLevel
+		}
+		gw, err := gzip.NewWriterLevel(destination, level)
+		if err != nil {
+			return err
+		}
 		if c.uncompressedWriteCallback != nil {
 			dest = &callbackWriter{w: gw, callback: c.uncompressedWriteCallback, ctx: ctx}
 		} else {

@@ -16,6 +16,8 @@ import (
 )
 
 func TestResolveCompression(t *testing.T) {
+	level := func(n int) *int { return &n }
+
 	tests := []struct {
 		name            string
 		url             string
@@ -25,6 +27,7 @@ func TestResolveCompression(t *testing.T) {
 		wantType        string
 		wantExtension   string
 		wantZstdOptions bool
+		wantGzipLevel   *int
 		wantErr         string
 	}{
 		{name: "defaults", url: "gs://b/p", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst"},
@@ -43,8 +46,15 @@ func TestResolveCompression(t *testing.T) {
 		{name: "local path", url: "/data/blocks?compression=gzip&extension=dbin.gz", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.gz"},
 		{name: "unknown compression", url: "gs://b/p?compression=lz4", extension: "dbin.zst", compressionType: "zstd", wantErr: `invalid compression "lz4"`},
 		{name: "extension with leading dot", url: "gs://b/p?extension=.dbin.gz", extension: "dbin.zst", compressionType: "zstd", wantErr: `invalid extension ".dbin.gz"`},
-		{name: "config on gzip", url: "gs://b/p?compression_config=best", extension: "jsonl.gz", compressionType: "gzip", wantErr: `requires zstd compression, store compression is "gzip"`},
-		{name: "config on none", url: "gs://b/p?compression=none&compression_config=best", extension: "dbin.zst", compressionType: "zstd", wantErr: `requires zstd compression, store compression is "none"`},
+		{name: "gzip level", url: "gs://b/p?compression_config=9", extension: "jsonl.gz", compressionType: "gzip", wantType: "gzip", wantExtension: "jsonl.gz", wantGzipLevel: level(9)},
+		{name: "gzip level zero", url: "gs://b/p?compression_config=0", extension: "jsonl.gz", compressionType: "gzip", wantType: "gzip", wantExtension: "jsonl.gz", wantGzipLevel: level(0)},
+		{name: "gzip level huffman only", url: "gs://b/p?compression_config=-2", extension: "jsonl.gz", compressionType: "gzip", wantType: "gzip", wantExtension: "jsonl.gz", wantGzipLevel: level(-2)},
+		{name: "gzip level with query gzip", url: "gs://b/p?compression=gzip&compression_config=1", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.zst", wantGzipLevel: level(1)},
+		{name: "zstd config on gzip", url: "gs://b/p?compression_config=best", extension: "jsonl.gz", compressionType: "gzip", wantErr: `invalid compression_config "best" for gzip: expected an integer level from -2 to 9`},
+		{name: "gzip level too high", url: "gs://b/p?compression_config=10", extension: "jsonl.gz", compressionType: "gzip", wantErr: `invalid compression_config "10" for gzip`},
+		{name: "gzip level too low", url: "gs://b/p?compression_config=-3", extension: "jsonl.gz", compressionType: "gzip", wantErr: `invalid compression_config "-3" for gzip`},
+		{name: "gzip level on zstd", url: "gs://b/p?compression_config=9", extension: "dbin.zst", compressionType: "zstd", wantErr: `invalid compression_config "9": unknown level "9"`},
+		{name: "config on none", url: "gs://b/p?compression=none&compression_config=best", extension: "dbin.zst", compressionType: "zstd", wantErr: `requires zstd or gzip compression, store compression is "none"`},
 		{name: "invalid config", url: "gs://b/p?compression_config=fast", extension: "dbin.zst", compressionType: "zstd", wantErr: `unknown level "fast"`},
 	}
 
@@ -63,6 +73,11 @@ func TestResolveCompression(t *testing.T) {
 			assert.Equal(t, tt.wantType, got.Type)
 			assert.Equal(t, tt.wantExtension, got.Extension)
 			assert.Equal(t, tt.wantZstdOptions, got.ZstdOptions != nil)
+			wantGzipLevel := gzip.DefaultCompression
+			if tt.wantGzipLevel != nil {
+				wantGzipLevel = *tt.wantGzipLevel
+			}
+			assert.Equal(t, wantGzipLevel, got.GzipLevel)
 		})
 	}
 }
@@ -72,7 +87,10 @@ func TestNewStoreRejectsInvalidCompressionQuery(t *testing.T) {
 	require.ErrorContains(t, err, `unknown level "fast"`)
 
 	_, err = NewJSONLStore("memory://test?compression_config=best")
-	require.ErrorContains(t, err, "requires zstd compression")
+	require.ErrorContains(t, err, `invalid compression_config "best" for gzip`)
+
+	_, err = NewDBinStore("memory://test?compression=none&compression_config=best")
+	require.ErrorContains(t, err, "requires zstd or gzip compression")
 
 	_, err = NewDBinStore("memory://test?compression=lz4")
 	require.ErrorContains(t, err, `invalid compression "lz4"`)
@@ -155,6 +173,28 @@ func TestCompressionConfigQueryIsKeptByDerivedStores(t *testing.T) {
 			assert.Equal(t, uint64(32<<20), header.WindowSize)
 		})
 	}
+}
+
+func TestCompressionConfigGzipLevel(t *testing.T) {
+	ctx := context.Background()
+	payload := bytes.Repeat([]byte("dstore gzip level 0123456789 "), 20000)
+
+	sizes := map[string]int{}
+	for _, level := range []string{"0", "1", "9"} {
+		dir := t.TempDir()
+		store, err := NewJSONLStore("file://" + dir + "?compression_config=" + level)
+		require.NoError(t, err)
+		require.NoError(t, store.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
+
+		raw, err := os.ReadFile(filepath.Join(dir, "0000000100.jsonl.gz"))
+		require.NoError(t, err)
+		sizes[level] = len(raw)
+
+		assertReadBack(t, store, "0000000100", payload)
+	}
+
+	assert.Greater(t, sizes["0"], len(payload), "level 0 stores without compressing")
+	assert.Less(t, sizes["9"], sizes["0"])
 }
 
 func assertReadBack(t *testing.T, store Store, name string, want []byte) {
