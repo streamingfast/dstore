@@ -106,16 +106,6 @@ func swapCompressionSuffix(extension, from, to string) string {
 	}
 }
 
-func compressionFromFilename(filename string) string {
-	switch {
-	case strings.HasSuffix(filename, ".zst"):
-		return "zstd"
-	case strings.HasSuffix(filename, ".gz"):
-		return "gzip"
-	}
-	return ""
-}
-
 func compressionSuffix(compressionType string) string {
 	switch compressionType {
 	case "zstd":

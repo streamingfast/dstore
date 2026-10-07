@@ -157,46 +157,6 @@ func assertReadBack(t *testing.T, store Store, name string, want []byte) {
 	assert.Equal(t, want, got)
 }
 
-func TestNewStoreFromFileURLDetectsCompression(t *testing.T) {
-	ctx := context.Background()
-	payload := bytes.Repeat([]byte("dstore compression detection "), 1000)
-
-	dir := t.TempDir()
-	zstdStore, err := NewDBinStore("file://" + dir)
-	require.NoError(t, err)
-	require.NoError(t, zstdStore.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
-
-	gzipStore, err := NewJSONLStore("file://" + dir)
-	require.NoError(t, err)
-	require.NoError(t, gzipStore.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
-
-	for _, name := range []string{"0000000100.dbin.zst", "0000000100.jsonl.gz"} {
-		t.Run(name, func(t *testing.T) {
-			got, err := ReadObject(ctx, "file://"+dir+"/"+name)
-			require.NoError(t, err)
-			assert.Equal(t, payload, got)
-
-			got, err = ReadObject(ctx, filepath.Join(dir, name))
-			require.NoError(t, err)
-			assert.Equal(t, payload, got)
-
-			onDisk, err := os.ReadFile(filepath.Join(dir, name))
-			require.NoError(t, err)
-			got, err = ReadObject(ctx, "file://"+dir+"/"+name+"?compression=none")
-			require.NoError(t, err)
-			assert.Equal(t, onDisk, got)
-		})
-	}
-
-	store, _, err := NewStoreFromFileURL("file://" + dir + "/0000000100.dbin.zst?compression_config=best/16")
-	require.NoError(t, err)
-	assert.NotNil(t, store.(*LocalStore).zstdOptions)
-
-	store, _, err = NewStoreFromFileURL("file://"+dir+"/0000000100.dbin.zst", Compression("gzip"))
-	require.NoError(t, err)
-	assert.Equal(t, "gzip", store.(*LocalStore).compressionType)
-}
-
 func TestObjectURLKeepsQueryAfterPath(t *testing.T) {
 	tests := []struct {
 		baseURL string

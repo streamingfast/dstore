@@ -33,10 +33,6 @@ Every store takes two query parameters on its URL, whatever the scheme:
   It only changes how files are written, and is an error on a store that does
   not compress with zstd.
 
-`NewStoreFromFileURL`, `OpenObject` and `ReadObject` take the compression from the
-file name when neither the `Compression` option nor `compression` is given: `.zst`
-is read as zstd, `.gz` as gzip, anything else as is.
-
 An invalid value makes the store constructor fail. `ResolveCompression` applies
 these rules and is exported for code that builds its own stores.
 
