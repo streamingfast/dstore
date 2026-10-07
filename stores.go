@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -100,8 +102,9 @@ func NewSimpleStore(baseURL string, opts ...Option) (Store, error) {
 
 // NewStore creates a new Store instance. The baseURL is always a directory, and does not end with a `/`.
 //
-// The `compression`, `extension` and `compression_config` query parameters of baseURL
-// override `compressionType`, `extension` and the Compression option, see ResolveCompression.
+// The `compression_config` query parameter of baseURL tunes the encoder of the store's
+// compression, `compressionType` or the Compression option: a zstd level and window
+// (`best`, `better/32`, `best/64`) or a gzip level (`1` to `9`).
 func NewStore(baseURL, extension, compressionType string, overwrite bool, opts ...Option) (Store, error) {
 	if strings.HasSuffix(baseURL, "/") {
 		return nil, fmt.Errorf("baseURL shouldn't end with a /")
@@ -114,6 +117,32 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 		return nil, err
 	}
 
+	store, err := newStoreForScheme(base, extension, compressionType, overwrite, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	if spec := base.Query().Get("compression_config"); spec != "" {
+		config := config{}
+		for _, opt := range opts {
+			opt.apply(&config)
+		}
+		if config.compression != "" {
+			compressionType = config.compression
+		}
+
+		// The query is left out of the logged URL, it can hold credentials (S3 secret_access_key).
+		zlog.Info("store compression configured",
+			zap.String("store", base.Scheme+"://"+base.Host+base.Path),
+			zap.String("compression", compressionType),
+			zap.String("compression_config", spec),
+		)
+	}
+
+	return store, nil
+}
+
+func newStoreForScheme(base *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (Store, error) {
 	switch base.Scheme {
 	case "gs":
 		return NewGSStore(base, extension, compressionType, overwrite, opts...)
@@ -154,8 +183,7 @@ func (f optionFunc) apply(config *config) {
 }
 
 // Compression defines which kind of compression to use when creating the store
-// instance. The `compression` query parameter of the store URL overrides it, see
-// ResolveCompression.
+// instance.
 //
 // Valid `compressionType` values:
 // - <empty>       No compression

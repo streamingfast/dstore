@@ -19,33 +19,24 @@ It currently supports:
 
 ### Compression
 
-Every store takes three query parameters on its URL, whatever the scheme:
+The `compression_config` query parameter of a store URL, whatever the scheme, tunes
+how that store compresses the files it writes:
 
-* `compression=zstd|gzip|none` overrides the compression the store was created
-  with, and the `Compression` option. An empty `compression=` means `none`.
-* `extension=<extension>` overrides the extension appended to file names, without
-  its leading dot. An empty `extension=` removes it. The extension never follows
-  `compression` by itself, so
-  `NewDBinStore("gs://bucket/merged-blocks?compression=gzip&extension=dbin.gz")`
-  writes and reads `.dbin.gz` files, while `?compression=gzip` alone writes gzip
-  into `.dbin.zst` files. Readers must use the same `compression` and `extension`
-  as the writer.
-* `compression_config` tunes the encoder of the store's compression. It only
-  changes how files are written, and is an error on a store without compression.
-  * zstd: `<level>` or `<level>/<window MiB>`, for example `best`, `better/32` or
-    `best/64`. Levels are `fastest`, `default`, `better` and `best`; the window
-    must be a power of two.
-  * gzip: an integer level from `-2` to `9`, as defined by `compress/gzip`: `1` is
-    the fastest, `9` the smallest, `0` stores without compressing, `-1` is the
-    default and `-2` uses Huffman coding only.
+* zstd stores: `<level>` or `<level>/<window MiB>`, for example `best`, `better/32`
+  or `best/64`. Levels are `fastest`, `default`, `better` and `best`; the window
+  must be a power of two.
+* gzip stores: an integer level from `-2` to `9`, as defined by `compress/gzip`:
+  `1` is the fastest, `9` the smallest.
 
-An invalid value makes the store constructor fail. `ResolveCompression` applies
-these rules and is exported for code that builds its own stores.
+For example, `NewDBinStore("gs://bucket/merged-blocks?compression_config=best/32")`.
 
-Nothing changes on the read side for `compression_config`: decoders take the
-window from the frame header. Every reader needs memory for that window, though,
-and the `zstd` command line tool refuses windows above 128 MiB unless run with
-`--long=31` or `--memory`.
+The store constructor fails when the value is not valid for the store's
+compression (`8` on a zstd store, `better` on a gzip one), or when the store has
+no compression. Sub-stores and clones keep the setting, and `NewStore` logs it.
+
+Nothing changes on the read side: decoders take the window from the frame header.
+Every reader needs memory for that window, though, and the `zstd` command line tool
+refuses windows above 128 MiB unless run with `--long=31` or `--memory`.
 
 Measured on BNB Chain merged blocks (16-core arm64), relative to the defaults:
 
