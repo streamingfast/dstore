@@ -28,20 +28,19 @@ func TestResolveCompression(t *testing.T) {
 		wantErr         string
 	}{
 		{name: "defaults", url: "gs://b/p", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst"},
-		{name: "query gzip", url: "gs://b/p?compression=gzip", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.gz"},
-		{name: "query none", url: "gs://b/p?compression=none", extension: "dbin.zst", compressionType: "zstd", wantType: "", wantExtension: "dbin"},
-		{name: "query zstd on gzip store", url: "gs://b/p?compression=zstd", extension: "jsonl.gz", compressionType: "gzip", wantType: "zstd", wantExtension: "jsonl.zst"},
-		{name: "query same as default", url: "gs://b/p?compression=zstd", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst"},
-		{name: "bare suffix extension", url: "gs://b/p?compression=gzip", extension: "zst", compressionType: "zstd", wantType: "gzip", wantExtension: "gz"},
-		{name: "bare suffix extension to none", url: "gs://b/p?compression=none", extension: "zst", compressionType: "zstd", wantType: "", wantExtension: ""},
-		{name: "extension without suffix", url: "gs://b/p?compression=gzip", extension: "dbin", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin"},
-		{name: "no compression default keeps extension", url: "gs://b/p?compression=zstd", extension: "", compressionType: "", wantType: "zstd", wantExtension: ""},
-		{name: "option overrides default", url: "gs://b/p", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "gzip", wantExtension: "dbin.gz"},
-		{name: "query overrides option", url: "gs://b/p?compression=none", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "", wantExtension: "dbin"},
+		{name: "query gzip keeps extension", url: "gs://b/p?compression=gzip", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.zst"},
+		{name: "query gzip with extension", url: "gs://b/p?compression=gzip&extension=dbin.gz", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.gz"},
+		{name: "query none with extension", url: "gs://b/p?compression=none&extension=dbin", extension: "dbin.zst", compressionType: "zstd", wantType: "", wantExtension: "dbin"},
+		{name: "extension alone", url: "gs://b/p?extension=blocks.zst", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "blocks.zst"},
+		{name: "extension on store without one", url: "gs://b/p?compression=zstd&extension=jsonl.zst", extension: "", compressionType: "", wantType: "zstd", wantExtension: "jsonl.zst"},
+		{name: "empty extension is unset", url: "gs://b/p?extension=", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst"},
+		{name: "option overrides default", url: "gs://b/p", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "gzip", wantExtension: "dbin.zst"},
+		{name: "query overrides option", url: "gs://b/p?compression=none", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "", wantExtension: "dbin.zst"},
 		{name: "config", url: "gs://b/p?compression_config=best/32", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst", wantZstdOptions: true},
-		{name: "config with query zstd", url: "gs://b/p?compression=zstd&compression_config=better", extension: "jsonl.gz", compressionType: "gzip", wantType: "zstd", wantExtension: "jsonl.zst", wantZstdOptions: true},
-		{name: "local path", url: "/data/blocks?compression=gzip", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.gz"},
+		{name: "config with query zstd", url: "gs://b/p?compression=zstd&compression_config=better&extension=jsonl.zst", extension: "jsonl.gz", compressionType: "gzip", wantType: "zstd", wantExtension: "jsonl.zst", wantZstdOptions: true},
+		{name: "local path", url: "/data/blocks?compression=gzip&extension=dbin.gz", extension: "dbin.zst", compressionType: "zstd", wantType: "gzip", wantExtension: "dbin.gz"},
 		{name: "unknown compression", url: "gs://b/p?compression=lz4", extension: "dbin.zst", compressionType: "zstd", wantErr: `invalid compression "lz4"`},
+		{name: "extension with leading dot", url: "gs://b/p?extension=.dbin.gz", extension: "dbin.zst", compressionType: "zstd", wantErr: `invalid extension ".dbin.gz"`},
 		{name: "config on gzip", url: "gs://b/p?compression_config=best", extension: "jsonl.gz", compressionType: "gzip", wantErr: `requires zstd compression, store compression is "gzip"`},
 		{name: "config on none", url: "gs://b/p?compression=none&compression_config=best", extension: "dbin.zst", compressionType: "zstd", wantErr: `requires zstd compression, store compression is "none"`},
 		{name: "invalid config", url: "gs://b/p?compression_config=fast", extension: "dbin.zst", compressionType: "zstd", wantErr: `unknown level "fast"`},
@@ -77,12 +76,12 @@ func TestNewStoreRejectsInvalidCompressionQuery(t *testing.T) {
 	require.ErrorContains(t, err, `invalid compression "lz4"`)
 }
 
-func TestNewDBinStoreFollowsCompressionQuery(t *testing.T) {
+func TestNewDBinStoreFollowsCompressionAndExtensionQuery(t *testing.T) {
 	ctx := context.Background()
 	payload := bytes.Repeat([]byte("dstore compression query "), 1000)
 
 	dir := t.TempDir()
-	store, err := NewDBinStore("file://" + dir + "?compression=gzip")
+	store, err := NewDBinStore("file://" + dir + "?compression=gzip&extension=dbin.gz")
 	require.NoError(t, err)
 	require.NoError(t, store.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
 
@@ -97,7 +96,7 @@ func TestNewDBinStoreFollowsCompressionQuery(t *testing.T) {
 	assertReadBack(t, store, "0000000100", payload)
 
 	dir = t.TempDir()
-	store, err = NewDBinStore("file://" + dir + "?compression=none")
+	store, err = NewDBinStore("file://" + dir + "?compression=none&extension=dbin")
 	require.NoError(t, err)
 	require.NoError(t, store.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
 
@@ -164,7 +163,7 @@ func TestObjectURLKeepsQueryAfterPath(t *testing.T) {
 	}{
 		{baseURL: "memory://bucket/path", want: "memory://bucket/path/0000000100.dbin.zst"},
 		{baseURL: "memory://bucket/path?compression_config=best/32", want: "memory://bucket/path/0000000100.dbin.zst?compression_config=best/32"},
-		{baseURL: "memory://bucket/path?compression=gzip&project=p", want: "memory://bucket/path/0000000100.dbin.gz?compression=gzip&project=p"},
+		{baseURL: "memory://bucket/path?compression=gzip&extension=dbin.gz&project=p", want: "memory://bucket/path/0000000100.dbin.gz?compression=gzip&extension=dbin.gz&project=p"},
 		{baseURL: "memory://bucket?compression_config=best", want: "memory://bucket/0000000100.dbin.zst?compression_config=best"},
 	}
 

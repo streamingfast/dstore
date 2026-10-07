@@ -13,23 +13,23 @@ type StoreCompression struct {
 	// Type is "zstd", "gzip" or empty for no compression.
 	Type string
 
-	// Extension is appended to every object name, its compression suffix
-	// matching Type when the compression was overridden.
+	// Extension is appended to every object name, after a dot.
 	Extension string
 
 	// ZstdOptions are the encoder options of a zstd store, from compression_config.
 	ZstdOptions []zstd.EOption
 }
 
-// ResolveCompression returns the compression of a store created at baseURL
-// with the given default extension and compression type.
+// ResolveCompression returns the compression and extension of a store created
+// at baseURL with the given default extension and compression type.
 //
 // The default compression type is overridden by the Compression option, which
 // is itself overridden by the `compression` query parameter of baseURL (`zstd`,
-// `gzip` or `none`). When the compression is overridden and the extension ends
-// with the suffix of the default compression (`.zst` or `.gz`), that suffix is
-// replaced by the one of the new compression, so `dbin.zst` becomes `dbin.gz`
-// or `dbin`. Other extensions are kept as is.
+// `gzip` or `none`).
+//
+// The `extension` query parameter overrides the default extension, without its
+// leading dot (`extension=dbin.gz`). The extension never follows the
+// compression by itself: a store overriding one usually overrides both.
 //
 // The `compression_config` query parameter sets the zstd encoder level and
 // window as `<level>` or `<level>/<window MiB>` (`best`, `better/32`,
@@ -56,9 +56,16 @@ func ResolveCompression(baseURL *url.URL, extension, compressionType string, opt
 		return nil, fmt.Errorf("invalid compression %q: expected zstd, gzip or none", value)
 	}
 
+	if value := query.Get("extension"); value != "" {
+		if strings.HasPrefix(value, ".") {
+			return nil, fmt.Errorf("invalid extension %q: must not start with a dot", value)
+		}
+		extension = value
+	}
+
 	out := &StoreCompression{
 		Type:      resolved,
-		Extension: swapCompressionSuffix(extension, compressionType, resolved),
+		Extension: extension,
 	}
 
 	if spec := query.Get("compression_config"); spec != "" {
@@ -74,46 +81,6 @@ func ResolveCompression(baseURL *url.URL, extension, compressionType string, opt
 	}
 
 	return out, nil
-}
-
-func swapCompressionSuffix(extension, from, to string) string {
-	if from == to {
-		return extension
-	}
-
-	suffix := compressionSuffix(from)
-	if suffix == "" {
-		return extension
-	}
-
-	var base string
-	switch {
-	case extension == suffix:
-	case strings.HasSuffix(extension, "."+suffix):
-		base = strings.TrimSuffix(extension, "."+suffix)
-	default:
-		return extension
-	}
-
-	newSuffix := compressionSuffix(to)
-	switch {
-	case newSuffix == "":
-		return base
-	case base == "":
-		return newSuffix
-	default:
-		return base + "." + newSuffix
-	}
-}
-
-func compressionSuffix(compressionType string) string {
-	switch compressionType {
-	case "zstd":
-		return "zst"
-	case "gzip":
-		return "gz"
-	}
-	return ""
 }
 
 func compressionName(compressionType string) string {
