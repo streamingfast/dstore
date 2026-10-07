@@ -22,9 +22,9 @@ It currently supports:
 Every store takes two query parameters on its URL, whatever the scheme:
 
 * `compression=zstd|gzip|none` overrides the compression the store was created
-  with, and the `Compression` option.
+  with, and the `Compression` option. An empty `compression=` means `none`.
 * `extension=<extension>` overrides the extension appended to file names, without
-  its leading dot. The extension never follows `compression` by itself, so
+  its leading dot. An empty `extension=` removes it. The extension never follows `compression` by itself, so
   `NewDBinStore("gs://bucket/merged-blocks?compression=gzip&extension=dbin.gz")`
   writes and reads `.dbin.gz` files, while `?compression=gzip` alone writes gzip
   into `.dbin.zst` files. Readers must use the same `compression` and `extension`

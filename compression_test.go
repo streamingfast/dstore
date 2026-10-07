@@ -33,7 +33,9 @@ func TestResolveCompression(t *testing.T) {
 		{name: "query none with extension", url: "gs://b/p?compression=none&extension=dbin", extension: "dbin.zst", compressionType: "zstd", wantType: "", wantExtension: "dbin"},
 		{name: "extension alone", url: "gs://b/p?extension=blocks.zst", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "blocks.zst"},
 		{name: "extension on store without one", url: "gs://b/p?compression=zstd&extension=jsonl.zst", extension: "", compressionType: "", wantType: "zstd", wantExtension: "jsonl.zst"},
-		{name: "empty extension is unset", url: "gs://b/p?extension=", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst"},
+		{name: "empty extension removes it", url: "gs://b/p?extension=", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: ""},
+		{name: "empty compression is none", url: "gs://b/p?compression=", extension: "dbin.zst", compressionType: "zstd", wantType: "", wantExtension: "dbin.zst"},
+		{name: "empty compression overrides option", url: "gs://b/p?compression=", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "", wantExtension: "dbin.zst"},
 		{name: "option overrides default", url: "gs://b/p", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "gzip", wantExtension: "dbin.zst"},
 		{name: "query overrides option", url: "gs://b/p?compression=none", extension: "dbin.zst", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantType: "", wantExtension: "dbin.zst"},
 		{name: "config", url: "gs://b/p?compression_config=best/32", extension: "dbin.zst", compressionType: "zstd", wantType: "zstd", wantExtension: "dbin.zst", wantZstdOptions: true},
@@ -101,6 +103,15 @@ func TestNewDBinStoreFollowsCompressionAndExtensionQuery(t *testing.T) {
 	require.NoError(t, store.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
 
 	raw, err = os.ReadFile(filepath.Join(dir, "0000000100.dbin"))
+	require.NoError(t, err)
+	assert.Equal(t, payload, raw)
+
+	dir = t.TempDir()
+	store, err = NewDBinStore("file://" + dir + "?compression=&extension=")
+	require.NoError(t, err)
+	require.NoError(t, store.WriteObject(ctx, "0000000100", bytes.NewReader(payload)))
+
+	raw, err = os.ReadFile(filepath.Join(dir, "0000000100"))
 	require.NoError(t, err)
 	assert.Equal(t, payload, raw)
 }

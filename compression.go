@@ -25,11 +25,12 @@ type StoreCompression struct {
 //
 // The default compression type is overridden by the Compression option, which
 // is itself overridden by the `compression` query parameter of baseURL (`zstd`,
-// `gzip` or `none`).
+// `gzip`, or `none` which an empty value also means).
 //
 // The `extension` query parameter overrides the default extension, without its
-// leading dot (`extension=dbin.gz`). The extension never follows the
-// compression by itself: a store overriding one usually overrides both.
+// leading dot (`extension=dbin.gz`); an empty value removes it. The extension
+// never follows the compression by itself: a store overriding one usually
+// overrides both.
 //
 // The `compression_config` query parameter sets the zstd encoder level and
 // window as `<level>` or `<level>/<window MiB>` (`best`, `better/32`,
@@ -46,17 +47,19 @@ func ResolveCompression(baseURL *url.URL, extension, compressionType string, opt
 	}
 
 	query := baseURL.Query()
-	switch value := query.Get("compression"); value {
-	case "":
-	case "zstd", "gzip":
-		resolved = value
-	case "none":
-		resolved = ""
-	default:
-		return nil, fmt.Errorf("invalid compression %q: expected zstd, gzip or none", value)
+	if query.Has("compression") {
+		switch value := query.Get("compression"); value {
+		case "zstd", "gzip":
+			resolved = value
+		case "none", "":
+			resolved = ""
+		default:
+			return nil, fmt.Errorf("invalid compression %q: expected zstd, gzip or none", value)
+		}
 	}
 
-	if value := query.Get("extension"); value != "" {
+	if query.Has("extension") {
+		value := query.Get("extension")
 		if strings.HasPrefix(value, ".") {
 			return nil, fmt.Errorf("invalid extension %q: must not start with a dot", value)
 		}
