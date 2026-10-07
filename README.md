@@ -30,9 +30,32 @@ how that store compresses the files it writes:
 
 For example, `NewDBinStore("gs://bucket/merged-blocks?compression_config=best/32")`.
 
+On zstd stores, decoder settings can follow the level, separated by commas, or
+stand alone: `best/32,lowmem=false,pool=blocks`, `pool=cache`. They change how the
+store reads, not what it writes.
+
+* `lowmem=false` gives each decoder a history buffer of twice the window instead of
+  the window plus 1 MiB. With the default buffer, the decoder copies the whole
+  window back to the start of the buffer about every MiB once an object is larger
+  than its window; with `lowmem=false` it does so once per window. Objects smaller
+  than window + 1 MiB gain nothing and only use more memory.
+* `pool=<name>` reads with decoders kept in a process-wide pool of that name
+  (1 to 64 letters, digits, `-` or `_`), reused across objects and across every
+  store using the same name and `lowmem`. Pooled decoders decode on the reading
+  goroutine instead of 4 background ones. The pool holds no fixed number of
+  decoders: it keeps those given back by closed readers until garbage collection
+  drops the unused ones.
+
+Separate pools keep decoders sized for their own window: a decoder grows its
+buffer for the largest window it has read and keeps it, so a pool shared by 32 MiB
+and 16 MiB windows ends up with 32 MiB-window buffers in every decoder.
+
+Use commas between settings: Go drops a query value holding a `;`.
+
 The store constructor fails when the value is not valid for the store's
-compression (`8` on a zstd store, `better` on a gzip one), or when the store has
-no compression. Sub-stores and clones keep the setting, and `NewStore` logs it.
+compression (`8` on a zstd store, `better` on a gzip one, `pool=blocks` on a gzip
+one), or when the store has no compression. Sub-stores and clones keep the setting,
+and `NewStore` logs it.
 
 Nothing changes on the read side: decoders take the window from the frame header.
 Every reader needs memory for that window, though, and the `zstd` command line tool
@@ -49,6 +72,16 @@ Measured on BNB Chain merged blocks (16-core arm64), relative to the defaults:
 | `best/32` | 77.6% | 66 MB/s | 1365 MB/s |
 | `best/64` | 73.6% | 64 MB/s | 892 MB/s |
 | `best/128` | 71.4% | 64 MB/s | 623 MB/s |
+
+Reading 100 MiB objects written with `best/32`, 10 at a time (16-core arm64),
+relative to the defaults:
+
+| decoder settings | CPU | peak heap |
+|---|---|---|
+| (unset) | 100% | 1138 MB |
+| `pool=blocks` | 94% | 536 MB |
+| `lowmem=false` | 38% | 2143 MB |
+| `lowmem=false,pool=blocks` | 28% | 844 MB |
 
 ### Testing
 

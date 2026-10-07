@@ -19,8 +19,9 @@ import (
 type commonStore struct {
 	extension       string
 	compressionType string
-	zstdOptions     []zstd.EOption
-	gzipLevel       *int // gzip.DefaultCompression when nil
+	zstdConfig      *zstdConfig      // nil for library defaults
+	zstdDecoders    *zstdDecoderPool // nil when decoders are not pooled
+	gzipLevel       *int             // gzip.DefaultCompression when nil
 	overwrite       bool
 
 	compressedWriteCallback   func(ctx context.Context, size int)
@@ -161,7 +162,11 @@ func (c *commonStore) compressedCopy(ctx context.Context, destination io.Writer,
 			return err
 		}
 	case "zstd":
-		zstdEncoder, err := zstd.NewWriter(destination, c.zstdOptions...)
+		var encoderOptions []zstd.EOption
+		if c.zstdConfig != nil {
+			encoderOptions = c.zstdConfig.encoderOptions
+		}
+		zstdEncoder, err := zstd.NewWriter(destination, encoderOptions...)
 		if err != nil {
 			return err
 		}
@@ -208,15 +213,28 @@ func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadClos
 		}
 
 	case "zstd":
-		zstdReader, err := zstd.NewReader(reader)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create zstd reader: %w", err)
+		var zstdReader io.ReadCloser
+		if c.zstdDecoders != nil {
+			zstdReader, err = c.zstdDecoders.reader(reader)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			var decoderOptions []zstd.DOption
+			if c.zstdConfig != nil {
+				decoderOptions = c.zstdConfig.decoderOptions()
+			}
+			decoder, err := zstd.NewReader(reader, decoderOptions...)
+			if err != nil {
+				return nil, fmt.Errorf("unable to create zstd reader: %w", err)
+			}
+			zstdReader = decoder.IOReadCloser()
 		}
 
 		if c.uncompressedReadCallback != nil {
-			out = &callbackReadCloser{rc: zstdReader.IOReadCloser(), callback: c.uncompressedReadCallback, ctx: ctx}
+			out = &callbackReadCloser{rc: zstdReader, callback: c.uncompressedReadCallback, ctx: ctx}
 		} else {
-			out = zstdReader.IOReadCloser()
+			out = zstdReader
 		}
 	default:
 		if c.uncompressedReadCallback != nil {

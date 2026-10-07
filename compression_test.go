@@ -23,6 +23,8 @@ func TestNewCommonStoreCompressionConfig(t *testing.T) {
 		compressionType string
 		opts            []Option
 		wantZstdOptions bool
+		wantLowmem      *bool
+		wantPool        string
 		wantGzipLevel   *int
 		wantErr         string
 	}{
@@ -31,6 +33,9 @@ func TestNewCommonStoreCompressionConfig(t *testing.T) {
 		{name: "empty on none", url: "gs://b/p?compression_config=", compressionType: ""},
 		{name: "zstd level", url: "gs://b/p?compression_config=better", compressionType: "zstd", wantZstdOptions: true},
 		{name: "zstd level and window", url: "gs://b/p?compression_config=best/32", compressionType: "zstd", wantZstdOptions: true},
+		{name: "zstd level window and decoder settings", url: "gs://b/p?compression_config=best/32,lowmem=false,pool=blocks", compressionType: "zstd", wantZstdOptions: true, wantLowmem: boolPtr(false), wantPool: "blocks"},
+		{name: "zstd decoder pool only", url: "gs://b/p?compression_config=pool=cache", compressionType: "zstd", wantPool: "cache"},
+		{name: "zstd lowmem only", url: "gs://b/p?compression_config=lowmem=false", compressionType: "zstd", wantLowmem: boolPtr(false)},
 		{name: "gzip level", url: "gs://b/p?compression_config=8", compressionType: "gzip", wantGzipLevel: level(8)},
 		{name: "gzip level huffman only", url: "gs://b/p?compression_config=-2", compressionType: "gzip", wantGzipLevel: level(-2)},
 		{name: "option decides the compression", url: "gs://b/p?compression_config=8", compressionType: "zstd", opts: []Option{Compression("gzip")}, wantGzipLevel: level(8)},
@@ -44,6 +49,9 @@ func TestNewCommonStoreCompressionConfig(t *testing.T) {
 		{name: "garbage on gzip", url: "gs://b/p?compression_config=blah", compressionType: "gzip", wantErr: `invalid compression_config "blah" for gzip`},
 		{name: "garbage on none", url: "gs://b/p?compression_config=blah", compressionType: "", wantErr: "this store has no compression"},
 		{name: "gzip level too high", url: "gs://b/p?compression_config=10", compressionType: "gzip", wantErr: `invalid compression_config "10" for gzip`},
+		{name: "zstd unknown decoder setting", url: "gs://b/p?compression_config=best,concurrency=2", compressionType: "zstd", wantErr: `unknown setting "concurrency", expected lowmem or pool`},
+		{name: "pool on gzip", url: "gs://b/p?compression_config=8,pool=blocks", compressionType: "gzip", wantErr: "lowmem and pool apply to zstd stores only"},
+		{name: "pool on none", url: "gs://b/p?compression_config=pool=blocks", compressionType: "", wantErr: "this store has no compression"},
 		{name: "zstd window not a power of two", url: "gs://b/p?compression_config=best/48", compressionType: "zstd", wantErr: `invalid compression_config "best/48" for zstd: window size must be a power of 2`},
 	}
 
@@ -60,7 +68,15 @@ func TestNewCommonStoreCompressionConfig(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, "ext", common.extension)
-			assert.Equal(t, tt.wantZstdOptions, common.zstdOptions != nil)
+			if tt.compressionType == "zstd" && common.zstdConfig != nil {
+				assert.Equal(t, tt.wantZstdOptions, common.zstdConfig.encoderOptions != nil)
+				assert.Equal(t, tt.wantLowmem, common.zstdConfig.lowmem)
+				assert.Equal(t, tt.wantPool, common.zstdConfig.pool)
+				assert.Equal(t, tt.wantPool != "", common.zstdDecoders != nil)
+			} else {
+				assert.False(t, tt.wantZstdOptions)
+				assert.Empty(t, tt.wantPool)
+			}
 			assert.Equal(t, tt.wantGzipLevel, common.gzipLevel)
 		})
 	}

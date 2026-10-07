@@ -102,9 +102,11 @@ func NewSimpleStore(baseURL string, opts ...Option) (Store, error) {
 
 // NewStore creates a new Store instance. The baseURL is always a directory, and does not end with a `/`.
 //
-// The `compression_config` query parameter of baseURL tunes the encoder of the store's
-// compression, `compressionType` or the Compression option: a zstd level and window
-// (`best`, `better/32`, `best/64`) or a gzip level (`1` to `9`).
+// The `compression_config` query parameter of baseURL tunes the store's compression,
+// `compressionType` or the Compression option: a zstd level and window (`best`,
+// `better/32`, `best/64`), optionally followed by the zstd decoder settings
+// `lowmem=<bool>` and `pool=<name>` (`best/32,lowmem=false,pool=blocks`), or a gzip
+// level (`1` to `9`).
 func NewStore(baseURL, extension, compressionType string, overwrite bool, opts ...Option) (Store, error) {
 	if strings.HasSuffix(baseURL, "/") {
 		return nil, fmt.Errorf("baseURL shouldn't end with a /")
