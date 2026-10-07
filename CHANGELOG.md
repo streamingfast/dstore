@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+* `NewStore` returns a nil `Store` on error, instead of a nil store pointer wrapped in a non-nil interface.
+
 * `ObjectURL` keeps the query of the store URL after the object path (`gs://bucket/path/file.dbin.zst?project=p`) instead of appending the path to the query.
 
 * S3 and Azure stores: `ListFoldersFromTo` now stops paging as soon as the exclusive upper bound is reached, instead of listing the rest of the prefix to discard it. `S3Store.WalkFromTo` does the same, and compares the bound against the full name rather than a prefix-stripped one, which made it yield keys past the bound whenever `prefix` was non-empty.
