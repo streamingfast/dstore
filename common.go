@@ -217,6 +217,7 @@ func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadClos
 		if c.zstdDecoders != nil {
 			zstdReader, err = c.zstdDecoders.reader(reader)
 			if err != nil {
+				reader.Close()
 				return nil, err
 			}
 		} else {
@@ -226,9 +227,10 @@ func (c *commonStore) uncompressedReader(ctx context.Context, reader io.ReadClos
 			}
 			decoder, err := zstd.NewReader(reader, decoderOptions...)
 			if err != nil {
+				reader.Close()
 				return nil, fmt.Errorf("unable to create zstd reader: %w", err)
 			}
-			zstdReader = decoder.IOReadCloser()
+			zstdReader = &zstdReadCloser{decoder: decoder, body: reader}
 		}
 
 		if c.uncompressedReadCallback != nil {

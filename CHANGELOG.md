@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+* zstd stores now close the object body, a file or an HTTP response, when the reader returned by `OpenObject` is closed, as gzip stores already did. Closing only stopped the decoder, so a reader closed before the end of the object kept its HTTP stream or connection open until its context was canceled, never when opened with `context.Background()`, and local stores kept the file descriptor until garbage collection. The body is also closed when the zstd reader cannot be created.
+
 * `NewStore` returns a nil `Store` on error, instead of a nil store pointer wrapped in a non-nil interface.
 
 * `ObjectURL` keeps the query of the store URL after the object path (`gs://bucket/path/file.dbin.zst?project=p`) instead of appending the path to the query.

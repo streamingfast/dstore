@@ -184,6 +184,29 @@ func (p *zstdDecoderPool) put(dec *zstd.Decoder) {
 	p.pool.Put(dec)
 }
 
+// zstdReadCloser closes the object body along with the decoder reading it.
+// The decoder's own IOReadCloser only stops the decoder and leaves the body,
+// a file or an HTTP response, open.
+type zstdReadCloser struct {
+	decoder *zstd.Decoder
+	body    io.Closer
+	once    sync.Once
+}
+
+func (r *zstdReadCloser) Read(p []byte) (int, error) { return r.decoder.Read(p) }
+
+func (r *zstdReadCloser) WriteTo(w io.Writer) (int64, error) { return r.decoder.WriteTo(w) }
+
+// Close closes the body first, which unblocks a decoder goroutine waiting on it,
+// then the decoder, which waits for its goroutines to exit.
+func (r *zstdReadCloser) Close() (err error) {
+	r.once.Do(func() {
+		err = r.body.Close()
+		r.decoder.Close()
+	})
+	return err
+}
+
 var errReadOnClosedReader = errors.New("read on a closed zstd reader")
 
 // pooledZstdReadCloser hands its decoder back to the pool on Close. Once

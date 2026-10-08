@@ -252,3 +252,40 @@ func TestPooledZstdReaderClosesBody(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+func TestZstdReaderClosesBody(t *testing.T) {
+	for _, spec := range []string{"", "lowmem=false", "pool=closes-body-test"} {
+		t.Run(spec, func(t *testing.T) {
+			conf, err := parseZstdConfig(spec)
+			require.NoError(t, err)
+			c := commonStore{compressionType: "zstd", zstdConfig: conf, zstdDecoders: zstdDecoderPoolFor(conf)}
+
+			body := &closeCountingReader{Reader: bytes.NewReader(encodeWith(t, nil, []byte("hello")))}
+			rc, err := c.uncompressedReader(context.Background(), body)
+			require.NoError(t, err)
+			got, err := io.ReadAll(rc)
+			require.NoError(t, err)
+			assert.Equal(t, "hello", string(got))
+
+			require.NoError(t, rc.Close())
+			require.NoError(t, rc.Close())
+			assert.Equal(t, 1, body.closes)
+		})
+	}
+}
+
+func TestZstdReaderClosesBodyReadPartially(t *testing.T) {
+	payload := bytes.Repeat([]byte("partial "), 1<<20)
+	conf, err := parseZstdConfig("")
+	require.NoError(t, err)
+	c := commonStore{compressionType: "zstd", zstdConfig: conf}
+
+	body := &closeCountingReader{Reader: bytes.NewReader(encodeWith(t, nil, payload))}
+	rc, err := c.uncompressedReader(context.Background(), body)
+	require.NoError(t, err)
+	_, err = io.ReadFull(rc, make([]byte, 1024))
+	require.NoError(t, err)
+
+	require.NoError(t, rc.Close())
+	assert.Equal(t, 1, body.closes)
+}
