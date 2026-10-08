@@ -5,17 +5,23 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // newCommonStore builds the common part of a store from its constructor
 // arguments and opts.
 //
 // The compression type is the Compression option when given, compressionType
-// otherwise. The `compression_config` query parameter of baseURL tunes its
-// encoder: for zstd, the level and window as `<level>` or `<level>/<window MiB>`
-// (`best`, `better/32`, `best/64`); for gzip, an integer level from -2 to 9 as
-// defined by compress/gzip (`1` fastest, `9` smallest). It is an error on a store
-// without compression, or when the value is not valid for its compression.
+// otherwise. The `compression_config` query parameter of baseURL tunes it: for
+// zstd, the encoder level and window as `<level>` or `<level>/<window MiB>`
+// (`best`, `better/32`, `best/64`), optionally followed by the decoder settings
+// `lowmem=<bool>` and `pool=<name>` (`best/32,lowmem=false,pool=blocks`, see
+// parseZstdConfig); for gzip, an integer level from -2 to 9 as defined by
+// compress/gzip (`1` fastest, `9` smallest). It is an error on a store without
+// compression, or when the value is not valid for its compression.
+//
+// zstd stores read with the `default` decoder pool unless the parameter names
+// another one or `pool=none`.
 func newCommonStore(baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*commonStore, error) {
 	conf := config{}
 	for _, opt := range opts {
@@ -38,17 +44,29 @@ func newCommonStore(baseURL *url.URL, extension, compressionType string, overwri
 
 	spec := baseURL.Query().Get("compression_config")
 	if spec == "" {
+		if compressionType == "zstd" {
+			conf, err := parseZstdConfig("")
+			if err != nil {
+				return nil, err
+			}
+			common.zstdConfig = conf
+			common.zstdDecoders = zstdDecoderPoolFor(conf)
+		}
 		return common, nil
 	}
 
 	switch compressionType {
 	case "zstd":
-		zstdOptions, err := parseZstdConfig(spec)
+		conf, err := parseZstdConfig(spec)
 		if err != nil {
 			return nil, err
 		}
-		common.zstdOptions = zstdOptions
+		common.zstdConfig = conf
+		common.zstdDecoders = zstdDecoderPoolFor(conf)
 	case "gzip":
+		if strings.ContainsAny(spec, ",=") {
+			return nil, fmt.Errorf("invalid compression_config %q for gzip: lowmem and pool apply to zstd stores only, expected an integer level from %d to %d", spec, gzip.HuffmanOnly, gzip.BestCompression)
+		}
 		level, err := parseGzipConfig(spec)
 		if err != nil {
 			return nil, err
