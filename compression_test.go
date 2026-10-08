@@ -35,6 +35,7 @@ func TestNewCommonStoreCompressionConfig(t *testing.T) {
 		{name: "zstd level and window", url: "gs://b/p?compression_config=best/32", compressionType: "zstd", wantZstdOptions: true},
 		{name: "zstd level window and decoder settings", url: "gs://b/p?compression_config=best/32,lowmem=false,pool=blocks", compressionType: "zstd", wantZstdOptions: true, wantLowmem: boolPtr(false), wantPool: "blocks"},
 		{name: "zstd decoder pool only", url: "gs://b/p?compression_config=pool=cache", compressionType: "zstd", wantPool: "cache"},
+		{name: "zstd without pool", url: "gs://b/p?compression_config=better,pool=none", compressionType: "zstd", wantZstdOptions: true, wantPool: "none"},
 		{name: "zstd lowmem only", url: "gs://b/p?compression_config=lowmem=false", compressionType: "zstd", wantLowmem: boolPtr(false)},
 		{name: "gzip level", url: "gs://b/p?compression_config=8", compressionType: "gzip", wantGzipLevel: level(8)},
 		{name: "gzip level huffman only", url: "gs://b/p?compression_config=-2", compressionType: "gzip", wantGzipLevel: level(-2)},
@@ -68,11 +69,19 @@ func TestNewCommonStoreCompressionConfig(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, "ext", common.extension)
-			if tt.compressionType == "zstd" && common.zstdConfig != nil {
+			if common.compressionType == "zstd" {
+				wantPool := tt.wantPool
+				switch wantPool {
+				case "":
+					wantPool = "default"
+				case "none":
+					wantPool = ""
+				}
+				require.NotNil(t, common.zstdConfig)
 				assert.Equal(t, tt.wantZstdOptions, common.zstdConfig.encoderOptions != nil)
 				assert.Equal(t, tt.wantLowmem, common.zstdConfig.lowmem)
-				assert.Equal(t, tt.wantPool, common.zstdConfig.pool)
-				assert.Equal(t, tt.wantPool != "", common.zstdDecoders != nil)
+				assert.Equal(t, wantPool, common.zstdConfig.pool)
+				assert.Equal(t, wantPool != "", common.zstdDecoders != nil)
 			} else {
 				assert.False(t, tt.wantZstdOptions)
 				assert.Empty(t, tt.wantPool)

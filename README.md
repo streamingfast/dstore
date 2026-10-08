@@ -44,7 +44,9 @@ store reads, not what it writes.
   store using the same name and `lowmem`. Pooled decoders decode on the reading
   goroutine instead of 4 background ones. The pool holds no fixed number of
   decoders: it keeps those given back by closed readers until garbage collection
-  drops the unused ones.
+  drops the unused ones. A zstd store naming no pool reads with the `default` one.
+* `pool=none` gives each object a decoder of its own, with 4 background
+  goroutines, closed with the reader.
 
 Separate pools keep decoders sized for their own window: a decoder grows its
 buffer for the largest window it has read and keeps it, so a pool shared by 32 MiB
@@ -73,15 +75,14 @@ Measured on BNB Chain merged blocks (16-core arm64), relative to the defaults:
 | `best/64` | 73.6% | 64 MB/s | 892 MB/s |
 | `best/128` | 71.4% | 64 MB/s | 623 MB/s |
 
-Reading 100 MiB objects written with `best/32`, 10 at a time (16-core arm64),
-relative to the defaults:
+Reading 100 MiB objects written with `best/32`, 10 at a time (16-core arm64):
 
 | decoder settings | CPU | peak heap |
 |---|---|---|
-| (unset) | 100% | 1138 MB |
-| `pool=blocks` | 94% | 536 MB |
-| `lowmem=false` | 38% | 2143 MB |
-| `lowmem=false,pool=blocks` | 28% | 844 MB |
+| `pool=none` | 100% | 1138 MB |
+| (unset, `default` pool) | 94% | 536 MB |
+| `lowmem=false,pool=none` | 38% | 2143 MB |
+| `lowmem=false` (`default` pool) | 28% | 844 MB |
 
 ### Testing
 

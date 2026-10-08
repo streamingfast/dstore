@@ -102,12 +102,16 @@ func TestParseZstdDecoderSettings(t *testing.T) {
 		{spec: "best/32,lowmem=false,pool=blocks", wantEncoder: true, wantLowmem: boolPtr(false), wantPool: "blocks"},
 		{spec: "better,pool=cache", wantEncoder: true, wantPool: "cache"},
 		{spec: "pool=cache,lowmem=true", wantLowmem: boolPtr(true), wantPool: "cache"},
-		{spec: "lowmem=0", wantLowmem: boolPtr(false)},
+		{spec: "", wantPool: "default"},
+		{spec: "better", wantEncoder: true, wantPool: "default"},
+		{spec: "lowmem=0", wantLowmem: boolPtr(false), wantPool: "default"},
+		{spec: "best/32,pool=none", wantEncoder: true},
+		{spec: "pool=default", wantPool: "default"},
 		{spec: "pool=my_pool-2", wantPool: "my_pool-2"},
 		{spec: "lowmem=nope", wantErr: `lowmem "nope" must be true or false`},
-		{spec: "pool=", wantErr: `pool "" must be 1 to 64 letters, digits, '-' or '_'`},
-		{spec: "pool=a/b", wantErr: `pool "a/b" must be 1 to 64 letters`},
-		{spec: "pool=" + strings.Repeat("a", 65), wantErr: "must be 1 to 64 letters"},
+		{spec: "pool=", wantErr: `pool "" must be none or 1 to 64 letters, digits, '-' or '_'`},
+		{spec: "pool=a/b", wantErr: `pool "a/b" must be none or 1 to 64 letters`},
+		{spec: "pool=" + strings.Repeat("a", 65), wantErr: "must be none or 1 to 64 letters"},
 		{spec: "pool=blocks,best", wantErr: `"best" must come first or be written as <key>=<value>`},
 		{spec: "best,", wantErr: `"" must come first or be written as <key>=<value>`},
 		{spec: "best,window=32", wantErr: `unknown setting "window", expected lowmem or pool`},
@@ -143,8 +147,13 @@ func TestZstdDecoderPoolIsSharedByNameAndLowmem(t *testing.T) {
 	assert.Same(t, blocks, poolOf("memory://b?compression_config=lowmem=false,pool=shared-test"), "same name and lowmem share the pool")
 	assert.NotSame(t, blocks, poolOf("memory://c?compression_config=pool=shared-test"), "another lowmem gets its own pool")
 	assert.NotSame(t, blocks, poolOf("memory://d?compression_config=lowmem=false,pool=other-test"), "another name gets its own pool")
-	assert.Nil(t, poolOf("memory://e?compression_config=lowmem=false"))
-	assert.Nil(t, poolOf("memory://f"))
+	defaultPool := poolOf("memory://e")
+	require.NotNil(t, defaultPool, "a store naming no pool reads with the default one")
+	assert.Same(t, defaultPool, poolOf("memory://f?compression_config=best/32"))
+	assert.Same(t, defaultPool, poolOf("memory://g?compression_config=pool=default"))
+	assert.NotSame(t, defaultPool, poolOf("memory://h?compression_config=lowmem=false"), "another lowmem gets its own default pool")
+	assert.Nil(t, poolOf("memory://i?compression_config=pool=none"))
+	assert.Nil(t, poolOf("memory://j?compression_config=lowmem=false,pool=none"))
 }
 
 func TestZstdDecoderSettingsRoundTrip(t *testing.T) {
@@ -159,6 +168,8 @@ func TestZstdDecoderSettingsRoundTrip(t *testing.T) {
 	for _, spec := range []string{
 		"default/1",
 		"default/1,lowmem=false",
+		"default/1,pool=none",
+		"default/1,lowmem=false,pool=none",
 		"default/1,pool=roundtrip-test",
 		"default/1,lowmem=false,pool=roundtrip-test",
 	} {
@@ -254,7 +265,7 @@ func TestPooledZstdReaderClosesBody(t *testing.T) {
 func boolPtr(b bool) *bool { return &b }
 
 func TestZstdReaderClosesBody(t *testing.T) {
-	for _, spec := range []string{"", "lowmem=false", "pool=closes-body-test"} {
+	for _, spec := range []string{"pool=none", "lowmem=false,pool=none", "", "pool=closes-body-test"} {
 		t.Run(spec, func(t *testing.T) {
 			conf, err := parseZstdConfig(spec)
 			require.NoError(t, err)
@@ -276,7 +287,7 @@ func TestZstdReaderClosesBody(t *testing.T) {
 
 func TestZstdReaderClosesBodyReadPartially(t *testing.T) {
 	payload := bytes.Repeat([]byte("partial "), 1<<20)
-	conf, err := parseZstdConfig("")
+	conf, err := parseZstdConfig("pool=none")
 	require.NoError(t, err)
 	c := commonStore{compressionType: "zstd", zstdConfig: conf}
 

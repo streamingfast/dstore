@@ -19,6 +19,9 @@ import (
 // parseZstdConfig); for gzip, an integer level from -2 to 9 as defined by
 // compress/gzip (`1` fastest, `9` smallest). It is an error on a store without
 // compression, or when the value is not valid for its compression.
+//
+// zstd stores read with the `default` decoder pool unless the parameter names
+// another one or `pool=none`.
 func newCommonStore(baseURL *url.URL, extension, compressionType string, overwrite bool, opts ...Option) (*commonStore, error) {
 	conf := config{}
 	for _, opt := range opts {
@@ -41,6 +44,14 @@ func newCommonStore(baseURL *url.URL, extension, compressionType string, overwri
 
 	spec := baseURL.Query().Get("compression_config")
 	if spec == "" {
+		if compressionType == "zstd" {
+			conf, err := parseZstdConfig("")
+			if err != nil {
+				return nil, err
+			}
+			common.zstdConfig = conf
+			common.zstdDecoders = zstdDecoderPoolFor(conf)
+		}
 		return common, nil
 	}
 

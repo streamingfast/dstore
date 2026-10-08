@@ -26,6 +26,14 @@ type zstdConfig struct {
 	pool string
 }
 
+const (
+	// zstdDefaultPool is the decoder pool of every zstd store that names none.
+	zstdDefaultPool = "default"
+
+	// zstdNoPool, as pool name, makes a store decode without a pool.
+	zstdNoPool = "none"
+)
+
 var zstdPoolNameRegexp = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // parseZstdConfig reads a zstd compression_config: an optional encoder setting
@@ -45,11 +53,14 @@ var zstdPoolNameRegexp = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 //
 // `pool=<name>` reads with decoders kept in a process-wide pool of that name and
 // reused across objects and stores. Pooled decoders decode on the calling
-// goroutine (concurrency 1).
+// goroutine (concurrency 1). A store naming no pool reads with the `default`
+// one. `pool=none` gives each object a decoder of its own, built with the
+// library defaults (concurrency 4), and closed with the reader.
 //
-// An empty spec keeps the library defaults.
+// An empty spec keeps the library defaults for the encoder and the decoders,
+// and reads with the `default` pool.
 func parseZstdConfig(spec string) (*zstdConfig, error) {
-	conf := &zstdConfig{}
+	conf := &zstdConfig{pool: zstdDefaultPool}
 	if spec == "" {
 		return conf, nil
 	}
@@ -76,8 +87,12 @@ func parseZstdConfig(spec string) (*zstdConfig, error) {
 			}
 			conf.lowmem = &lowmem
 		case "pool":
+			if value == zstdNoPool {
+				conf.pool = ""
+				continue
+			}
 			if !zstdPoolNameRegexp.MatchString(value) {
-				return nil, fmt.Errorf("invalid compression_config %q for zstd: pool %q must be 1 to 64 letters, digits, '-' or '_'", spec, value)
+				return nil, fmt.Errorf("invalid compression_config %q for zstd: pool %q must be none or 1 to 64 letters, digits, '-' or '_'", spec, value)
 			}
 			conf.pool = value
 		default:
