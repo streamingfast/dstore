@@ -135,7 +135,7 @@ func NewStore(baseURL, extension, compressionType string, overwrite bool, opts .
 		}
 
 		// The query is left out of the logged URL, it can hold credentials (S3 secret_access_key).
-		zlog.Info("store compression configured",
+		zlog.Debug("store compression configured",
 			zap.String("store", base.Scheme+"://"+base.Host+base.Path),
 			zap.String("compression", compressionType),
 			zap.String("compression_config", spec),
