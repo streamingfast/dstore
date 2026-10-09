@@ -74,11 +74,13 @@ services:
   #
   # Uses the well-known Azurite development account. Point the store at it with
   # AZURE_STORAGE_ENDPOINT and the matching AZURE_STORAGE_KEY.
+  # --skipApiVersionCheck lets Azurite accept the azblob SDK's API version when it is
+  # newer than the ones the emulator knows.
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite
     ports:
       - "10000:10000"   # Blob service
-    command: azurite-blob --blobHost 0.0.0.0 --loose
+    command: azurite-blob --blobHost 0.0.0.0 --loose --skipApiVersionCheck
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
       interval: 5s
