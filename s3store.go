@@ -349,7 +349,9 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, met
 
 		err := s.compressedCopy(ctx, pw, f)
 		writeDone <- err
-		pw.Close() // required to allow the uploader to complete
+		// The error, not a plain EOF, must reach the uploader: on EOF it completes the upload
+		// with what it has read so far, and the cancel below can come too late to stop it.
+		pw.CloseWithError(err)
 
 		if err != nil {
 			cancel()
@@ -394,6 +396,9 @@ func (s *S3Store) WriteObject(ctx context.Context, base string, f io.Reader, met
 
 	wg.Wait()
 
+	if err := <-writeDone; err != nil {
+		return fmt.Errorf("writing through pipe: %w", err)
+	}
 	return nil
 }
 
