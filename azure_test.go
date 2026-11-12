@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"testing"
@@ -118,4 +120,50 @@ func TestAzureStoreWriteObject(t *testing.T) {
 	readFiles, err = s.ListFiles(context.Background(), "", 10)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{}, readFiles)
+}
+
+func TestAzureStoreWalkFromSendsStartFrom(t *testing.T) {
+	var startFroms []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startFroms = append(startFroms, r.URL.Query().Get("startFrom"))
+
+		// "base/00000001" is below the starting point, as an endpoint ignoring startFrom
+		// would return it
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, `<?xml version="1.0" encoding="utf-8"?>
+<EnumerationResults ContainerName="cont"><Blobs>
+<Blob><Name>base/00000001.dbin</Name><Properties/></Blob>
+<Blob><Name>base/00000002.dbin</Name><Properties/></Blob>
+<Blob><Name>base/00000003.dbin</Name><Properties/></Blob>
+</Blobs><NextMarker/></EnumerationResults>`)
+	}))
+	defer server.Close()
+
+	t.Setenv("AZURE_STORAGE_ENDPOINT", server.URL)
+	t.Setenv("AZURE_STORAGE_KEY", "a2V5")
+
+	base, err := url.Parse("az://account.cont/base")
+	require.NoError(t, err)
+	s, err := NewAzureStore(base, "dbin", "", false)
+	require.NoError(t, err)
+
+	var seen []string
+	err = s.WalkFrom(context.Background(), "", "00000002", func(filename string) error {
+		seen = append(seen, filename)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"00000002", "00000003"}, seen)
+
+	seen = nil
+	err = s.WalkFromTo(context.Background(), "", "00000002", "00000003", func(filename string) error {
+		seen = append(seen, filename)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"00000002"}, seen)
+
+	require.NoError(t, s.Walk(context.Background(), "", func(string) error { return nil }))
+
+	assert.Equal(t, []string{"base/00000002", "base/00000002", ""}, startFroms)
 }
