@@ -38,7 +38,12 @@ func newLocalStoreContext(_ context.Context, baseURL *url.URL, extension, compre
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	basePath := filepath.Clean(baseURL.Path)
+	// Absolute so that walk can match the paths filepath.Walk returns against it: for a
+	// base path of `.`, filepath.Walk returns `file` and not `./file`.
+	basePath, err := filepath.Abs(baseURL.Path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to resolve base path %q: %w", baseURL.Path, err)
+	}
 	zlog.Debug("sanitized base path", zap.String("original_base_path", baseURL.Path), zap.String("sanitized_base_path", basePath))
 
 	myBaseURL := *baseURL
