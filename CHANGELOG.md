@@ -36,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+* A local store whose base path is `.` now finds its files. `Walk`, `WalkFrom` and the listings returned nothing, because `filepath.Walk(".")` reports `file` and not `./file`, which never matched the `./` prefix the walk filtered on. The base path is now made absolute when the store is created.
+
 * `S3Store.WriteObject` no longer commits a partial object when its reader fails partway. The reader's error was turned into a clean end of stream before the upload was cancelled, so an upload that got there first completed with the content read so far and `WriteObject` returned `nil`. The upload now fails with the reader's error whatever the timing.
 
 * zstd stores now close the object body, a file or an HTTP response, when the reader returned by `OpenObject` is closed, as gzip stores already did. Closing only stopped the decoder, so a reader closed before the end of the object kept its HTTP stream or connection open until its context was canceled, never when opened with `context.Background()`, and local stores kept the file descriptor until garbage collection. The body is also closed when the zstd reader cannot be created.
