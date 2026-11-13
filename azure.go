@@ -314,15 +314,37 @@ func (s *AzureStore) PushLocalFile(ctx context.Context, localFile, toBaseName st
 	return remove()
 }
 
+// WalkFrom has Azure start the listing at startingPoint (the startFrom parameter of List
+// Blobs), so it does not page through the files before it. The names listed are still
+// checked against startingPoint, for an endpoint that ignores startFrom.
 func (s *AzureStore) WalkFrom(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
-	return commonWalkFrom(s, ctx, prefix, startingPoint, f)
+	return commonWalkFrom(azureWalkStartingAt{s, startingPoint}, ctx, prefix, startingPoint, f)
 }
 
+// WalkFromTo starts the listing at startingPoint like WalkFrom does. Azure only takes an
+// end bound with the Arrow response format, so the walk stops at exclusiveEndPoint on
+// this side.
 func (s *AzureStore) WalkFromTo(ctx context.Context, prefix, startingPoint, exclusiveEndPoint string, f func(filename string) (err error)) error {
-	return commonWalkFromTo(s, ctx, prefix, startingPoint, exclusiveEndPoint, f)
+	return commonWalkFromTo(azureWalkStartingAt{s, startingPoint}, ctx, prefix, startingPoint, exclusiveEndPoint, f)
+}
+
+// azureWalkStartingAt is the store whose Walk lists from startingPoint, for the common
+// WalkFrom and WalkFromTo to check the bounds and filter the names on top of it.
+type azureWalkStartingAt struct {
+	*AzureStore
+	startingPoint string
+}
+
+func (w azureWalkStartingAt) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
+	return w.walk(ctx, prefix, w.startingPoint, f)
 }
 
 func (s *AzureStore) Walk(ctx context.Context, prefix string, f func(filename string) (err error)) error {
+	return s.walk(ctx, prefix, "", f)
+}
+
+// walk lists the files under prefix, from startingPoint when it is not empty.
+func (s *AzureStore) walk(ctx context.Context, prefix, startingPoint string, f func(filename string) (err error)) error {
 	p := strings.TrimLeft(s.baseURL.Path, "/") + "/"
 	if prefix != "" {
 		p = filepath.Join(p, prefix)
@@ -335,6 +357,12 @@ func (s *AzureStore) Walk(ctx context.Context, prefix string, f func(filename st
 
 	listOptions := &azblob.ListBlobsFlatOptions{
 		Prefix: &p,
+	}
+	if startingPoint != "" {
+		// startFrom is a blob name, inclusive, and the extension is left out so a name
+		// that extends startingPoint, like "a-b" for "a", is not skipped
+		startFrom := path.Join(strings.TrimLeft(s.baseURL.Path, "/"), startingPoint)
+		listOptions.StartFrom = &startFrom
 	}
 
 	pager := s.client.NewListBlobsFlatPager(s.containerName, listOptions)

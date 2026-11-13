@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+* Azure store: `WalkFrom` and `WalkFromTo` have Azure start the listing at the starting point, with the `startFrom` parameter of List Blobs, instead of listing every file under the prefix and skipping those before it. A walk from near the end of a store holding millions of files now takes a few calls instead of one per 5000 files before the starting point. The names are still checked against both bounds, so an endpoint that ignores `startFrom` returns the same files, at the old cost.
+
 * zstd stores read with decoders kept in a process-wide `default` pool unless `compression_config` names another pool, and those decoders work on the reading goroutine instead of 4 background ones. Reading 100 MiB `best/32` objects 10 at a time, that used 6% less CPU and 53% less peak heap; on 2 MiB objects, 42% less CPU. `compression_config=pool=none` brings back a decoder per object with 4 background goroutines. Reading from a zstd reader after closing it now returns an error.
 
 * Bumped `github.com/klauspost/compress` from v1.10.2 to v1.20.1, which requires Go 1.25. In v1.10.2 the `better` and `best` levels were aliases of `default`.
